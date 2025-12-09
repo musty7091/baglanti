@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- FİLTRELEME ALANI -->
 <div class="card mb-4 no-print">
     <div class="card-body bg-light">
         <form action="{{ url_for('main.rapor') }}" method="GET" class="row g-3 align-items-end">
@@ -33,7 +32,7 @@
 <div class="card mb-4">
     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
         <h4 class="mb-0">Aktif (Bekleyen) Bakiyeler</h4>
-        <button class="btn btn-sm btn-light" onclick="window.print()">Yazdır / PDF</button>
+        <button class="btn btn-sm btn-light no-print" onclick="window.print()">Yazdır / PDF</button>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -47,6 +46,7 @@
                         <th>Birim Maliyet (Net)</th>
                         <th>Kalan (Alacak)</th>
                         <th>Bakiye Değeri</th>
+                        <th class="no-print" style="width: 100px;">İşlem</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -62,15 +62,20 @@
                         <td class="text-end">{{ "{:,.2f}".format(row['net_maliyet']) }} TL</td>
                         <td class="text-center fw-bold text-danger">{{ row['kalan'] }}</td>
                         <td class="text-end fw-bold">{{ "{:,.2f}".format(row['net_maliyet'] * row['kalan']) }} TL</td>
+                        <td class="no-print">
+                            <a href="{{ url_for('main.fatura_duzenle', id=row['id']) }}" class="btn btn-sm btn-warning mb-1 w-100">Düzenle</a>
+                            <a href="{{ url_for('main.fatura_sil', id=row['id']) }}" class="btn btn-sm btn-danger w-100" onclick="return confirm('Bu faturayı silmek istediğinize emin misiniz?');">Sil</a>
+                        </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="7" class="text-center">Filtre kriterlerine uygun aktif bakiye bulunamadı.</td></tr>
+                    <tr><td colspan="8" class="text-center">Filtre kriterlerine uygun aktif bakiye bulunamadı.</td></tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-secondary">
                     <tr>
                         <th colspan="6" class="text-end">GENEL TOPLAM DEĞER:</th>
                         <th class="text-end">{{ "{:,.2f}".format(genel_toplam) }} TL</th>
+                        <th></th>
                     </tr>
                 </tfoot>
             </table>

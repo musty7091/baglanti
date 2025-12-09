@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h4 class="mb-0">Fatura Düzenle</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    ⚠️ <b>Dikkat:</b> Eğer bu faturadan daha önce mal çekildiyse, Adet ve Fiyat bilgilerini değiştiremezsiniz. Sadece belge no ve tarih güncellenebilir.
+                </div>
+                
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label>Fatura No</label>
+                            <input type="text" name="fatura_no" value="{{ f['fatura_no'] }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label>Tarih</label>
+                            <input type="date" name="tarih" value="{{ f['tarih'] }}" class="form-control" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label>Adet</label>
+                            <input type="number" name="adet" value="{{ f['toplam_adet'] }}" class="form-control" required>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label>Birim Fiyat (KDV Hariç)</label>
+                            <input type="number" step="0.01" name="fiyat" class="form-control" required placeholder="Tekrar giriniz">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label>İskonto (%)</label>
+                            <input type="number" step="0.01" name="iskonto" class="form-control" value="0">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label>KDV (%)</label>
+                            <input type="number" step="0.01" name="kdv" class="form-control" value="20">
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('main.rapor') }}" class="btn btn-secondary">İptal</a>
+                        <button type="submit" class="btn btn-warning">Güncelle</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

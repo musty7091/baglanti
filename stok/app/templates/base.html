@@ -22,13 +22,16 @@
         <div class="container">
             <a class="navbar-brand" href="/">🍷 Bağlantı Takip</a>
             <div class="collapse navbar-collapse">
+                {% if current_user.is_authenticated %}
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Özet</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('main.tanimlar') }}">Tanımlar</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('main.baglanti_yap') }}">Bağlantı</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('main.mal_cek') }}">Sevkiyat</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('main.rapor') }}">Rapor</a></li>
+                    <li class="nav-item ms-3"><a class="nav-link text-warning" href="{{ url_for('main.logout') }}">Çıkış Yap</a></li>
                 </ul>
+                {% endif %}
             </div>
         </div>
     </nav>

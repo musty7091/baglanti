@@ -1,5 +1,13 @@
 import sqlite3
 from flask import current_app
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+
+class User(UserMixin):
+    def __init__(self, id, username, password_hash):
+        self.id = id
+        self.username = username
+        self.password_hash = password_hash
 
 class DatabaseManager:
     @staticmethod
@@ -13,7 +21,7 @@ class DatabaseManager:
         conn = sqlite3.connect(db_name)
         c = conn.cursor()
         
-        # Tabloları oluştur
+        # Tablolar
         c.execute('''CREATE TABLE IF NOT EXISTS tedarikciler 
                      (id INTEGER PRIMARY KEY AUTOINCREMENT, ad TEXT)''')
         
@@ -31,10 +39,41 @@ class DatabaseManager:
                      (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                       fatura_id INTEGER, urun_id INTEGER, tedarikci_id INTEGER,
                       adet INTEGER, sevk_no TEXT, depo TEXT, teslim_alan TEXT, tarih TEXT)''')
+        
+        # Kullanıcılar Tablosu
+        c.execute('''CREATE TABLE IF NOT EXISTS kullanicilar 
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT)''')
+        
+        # Varsayılan Admin Kullanıcısı Oluştur (Eğer yoksa)
+        admin = c.execute("SELECT * FROM kullanicilar WHERE username = 'admin'").fetchone()
+        if not admin:
+            hashed_pw = generate_password_hash('admin123')
+            c.execute("INSERT INTO kullanicilar (username, password) VALUES (?, ?)", ('admin', hashed_pw))
+            print("Varsayılan kullanıcı oluşturuldu: admin / admin123")
+
         conn.commit()
         conn.close()
 
-    # --- İş Mantığı Metodları (Business Logic) ---
+    # --- Kullanıcı İşlemleri ---
+    @staticmethod
+    def get_user_by_id(user_id):
+        conn = DatabaseManager.get_db_connection()
+        user_data = conn.execute("SELECT * FROM kullanicilar WHERE id = ?", (user_id,)).fetchone()
+        conn.close()
+        if user_data:
+            return User(user_data['id'], user_data['username'], user_data['password'])
+        return None
+
+    @staticmethod
+    def get_user_by_username(username):
+        conn = DatabaseManager.get_db_connection()
+        user_data = conn.execute("SELECT * FROM kullanicilar WHERE username = ?", (username,)).fetchone()
+        conn.close()
+        if user_data:
+            return User(user_data['id'], user_data['username'], user_data['password'])
+        return None
+
+    # --- İş Mantığı Metodları ---
     
     @staticmethod
     def get_dashboard_stats():
@@ -54,7 +93,6 @@ class DatabaseManager:
 
     @staticmethod
     def add_baglanti(data):
-        # Maliyet hesaplama mantığı burada
         fiyat = float(data['fiyat'])
         iskonto = float(data['iskonto'])
         kdv = float(data['kdv'])
@@ -74,7 +112,6 @@ class DatabaseManager:
 
     @staticmethod
     def process_sevkiyat(data):
-        # FIFO ve Stok Düşme Mantığı
         conn = DatabaseManager.get_db_connection()
         cekilecek = int(data['adet'])
         
@@ -109,3 +146,58 @@ class DatabaseManager:
         conn.commit()
         conn.close()
         return True, "İşlem Başarılı"
+
+    # --- Silme ve Düzenleme Fonksiyonları ---
+
+    @staticmethod
+    def get_fatura(fatura_id):
+        conn = DatabaseManager.get_db_connection()
+        fatura = conn.execute("SELECT * FROM faturalar WHERE id = ?", (fatura_id,)).fetchone()
+        conn.close()
+        return fatura
+
+    @staticmethod
+    def delete_fatura(fatura_id):
+        conn = DatabaseManager.get_db_connection()
+        # Kontrol: Faturadan mal çekilmiş mi?
+        fatura = conn.execute("SELECT toplam_adet, kalan_adet FROM faturalar WHERE id = ?", (fatura_id,)).fetchone()
+        
+        if fatura['toplam_adet'] != fatura['kalan_adet']:
+            conn.close()
+            return False, "Bu faturadan mal sevkiyatı yapılmış! Önce sevkiyatları iptal etmelisiniz (Şu an desteklenmiyor)."
+        
+        conn.execute("DELETE FROM faturalar WHERE id = ?", (fatura_id,))
+        conn.commit()
+        conn.close()
+        return True, "Fatura başarıyla silindi."
+
+    @staticmethod
+    def update_fatura(fatura_id, data):
+        conn = DatabaseManager.get_db_connection()
+        
+        # Kontrol: Mal çekilmiş mi? Çekildiyse sadece Belge No ve Tarih değişebilir, ADET/FİYAT değişemez.
+        fatura = conn.execute("SELECT toplam_adet, kalan_adet FROM faturalar WHERE id = ?", (fatura_id,)).fetchone()
+        mal_cekilmis = fatura['toplam_adet'] != fatura['kalan_adet']
+        
+        yeni_adet = int(data['adet'])
+        
+        if mal_cekilmis and yeni_adet != fatura['toplam_adet']:
+            conn.close()
+            return False, "Bu faturadan mal çıkışı yapılmış. Adet değiştirilemez!"
+
+        # Maliyet yeniden hesapla
+        fiyat = float(data['fiyat'])
+        iskonto = float(data['iskonto'])
+        kdv = float(data['kdv'])
+        iskontolu_fiyat = fiyat - (fiyat * iskonto / 100)
+        net_maliyet = iskontolu_fiyat * (1 + kdv / 100)
+
+        conn.execute('''
+            UPDATE faturalar 
+            SET fatura_no=?, tarih=?, toplam_adet=?, kalan_adet=?, net_maliyet=?
+            WHERE id=?
+        ''', (data['fatura_no'], data['tarih'], yeni_adet, yeni_adet, net_maliyet, fatura_id))
+        
+        conn.commit()
+        conn.close()
+        return True, "Fatura güncellendi."
