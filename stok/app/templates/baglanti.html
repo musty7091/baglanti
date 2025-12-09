@@ -1,69 +1,117 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card">
-    <div class="card-header bg-primary text-white">
-        <h4 class="mb-0">Yeni Bağlantı Girişi (Mal Alımı)</h4>
-    </div>
-    <div class="card-body">
-        <div class="alert alert-info">
-            <small>💡 Buraya girdiğin mallar <b>Tedarikçi Bakiyesine</b> eklenecektir. Fiziksel stoğa henüz girmez.</small>
+<form action="{{ url_for('main.baglanti_kaydet') }}" method="POST" id="invoiceForm">
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Fatura Başlık Bilgileri</h5>
         </div>
-        <form action="{{ url_for('main.baglanti_kaydet') }}" method="POST">
+        <div class="card-body bg-light">
             <div class="row">
-                <div class="col-md-6 mb-3">
+                <div class="col-md-4 mb-3">
                     <label>Tedarikçi Seç</label>
-                    <select name="tedarikci_id" class="form-select" required>
+                    <select name="tedarikci_id" class="form-select select2" required>
                         <option value="">Seçiniz...</option>
                         {% for t in tedarikciler %}
                         <option value="{{ t['id'] }}">{{ t['ad'] }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-6 mb-3">
-                    <label>Fatura No / Belge No</label>
-                    <input type="text" name="fatura_no" class="form-control" required>
+                <div class="col-md-4 mb-3">
+                    <label>Fatura / Belge No</label>
+                    <input type="text" name="fatura_no" class="form-control" required placeholder="Örn: ABC2024">
                 </div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label>Ürün Seç</label>
-                    <select name="urun_id" class="form-select" required>
-                        <option value="">Seçiniz...</option>
-                        {% for u in urunler %}
-                        <option value="{{ u['id'] }}">{{ u['barkod'] }} - {{ u['ad'] }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6 mb-3">
+                <div class="col-md-4 mb-3">
                     <label>Fatura Tarihi</label>
                     <input type="date" name="tarih" class="form-control" value="{{ bugun }}" required>
                 </div>
             </div>
-
-            <hr>
-            <h6>Maliyet Hesaplama</h6>
-            <div class="row">
-                <div class="col-md-3 mb-3">
-                    <label>Adet (Miktar)</label>
-                    <input type="number" name="adet" class="form-control" required min="1">
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label>Birim Fiyat (KDV Hariç)</label>
-                    <input type="number" step="0.01" name="fiyat" class="form-control" required>
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label>İskonto (%)</label>
-                    <input type="number" step="0.01" name="iskonto" class="form-control" value="0">
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label>KDV (%)</label>
-                    <input type="number" step="0.01" name="kdv" class="form-control" value="20">
-                </div>
-            </div>
-
-            <button type="submit" class="btn btn-lg btn-success w-100">Bağlantıyı Kaydet</button>
-        </form>
+        </div>
     </div>
-</div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Fatura Kalemleri (Ürünler)</h5>
+            <button type="button" class="btn btn-sm btn-success" onclick="addRow()">+ Satır Ekle</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="overflow-x: visible;"> <table class="table table-bordered mb-0" id="itemsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 35%">Ürün</th>
+                            <th style="width: 10%">Adet</th>
+                            <th style="width: 15%">Birim Fiyat</th>
+                            <th style="width: 10%">İsk.(%)</th>
+                            <th style="width: 10%">KDV(%)</th>
+                            <th style="width: 5%">Sil</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td>
+                                <select name="urun_id[]" class="form-select select2" required>
+                                    <option value="">Ürün Seç...</option>
+                                    {% for u in urunler %}
+                                    <option value="{{ u['id'] }}">{{ u['barkod'] }} - {{ u['ad'] }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td><input type="number" name="adet[]" class="form-control" required min="1" placeholder="Adet"></td>
+                            <td><input type="number" step="0.01" name="fiyat[]" class="form-control" required placeholder="Fiyat"></td>
+                            <td><input type="number" step="0.01" name="iskonto[]" class="form-control" value="0"></td>
+                            <td><input type="number" step="0.01" name="kdv[]" class="form-control" value="20"></td>
+                            <td class="text-center"><button type="button" class="btn btn-danger btn-sm" disabled>X</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-lg btn-primary w-100">Tüm Bağlantıyı Kaydet</button>
+        </div>
+    </div>
+</form>
+
+<script>
+    // Ürün seçenekleri
+    const urunOptions = `
+        <option value="">Ürün Seç...</option>
+        {% for u in urunler %}
+        <option value="{{ u['id'] }}">{{ u['barkod'] }} - {{ u['ad'] }}</option>
+        {% endfor %}
+    `;
+
+    function addRow() {
+        const tbody = document.getElementById('tableBody');
+        const row = document.createElement('tr');
+        
+        row.innerHTML = `
+            <td>
+                <select name="urun_id[]" class="form-select select2-dynamic" required>
+                    ${urunOptions}
+                </select>
+            </td>
+            <td><input type="number" name="adet[]" class="form-control" required min="1" placeholder="Adet"></td>
+            <td><input type="number" step="0.01" name="fiyat[]" class="form-control" required placeholder="Fiyat"></td>
+            <td><input type="number" step="0.01" name="iskonto[]" class="form-control" value="0"></td>
+            <td><input type="number" step="0.01" name="kdv[]" class="form-control" value="20"></td>
+            <td class="text-center"><button type="button" class="btn btn-danger btn-sm" onclick="removeRow(this)">X</button></td>
+        `;
+        tbody.appendChild(row);
+
+        // YENİ EKLENEN SATIRI AKILLI YAP (Manuel Tetikleme)
+        // jQuery kullanarak son eklenen select'i bul ve select2 uygula
+        $(row).find('.select2-dynamic').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: "Seçiniz..."
+        });
+    }
+
+    function removeRow(btn) {
+        const row = btn.closest('tr');
+        // Silmeden önce select2 instancesini temizlemek iyi pratiktir
+        $(row).find('select').select2('destroy');
+        row.remove();
+    }
+</script>
 {% endblock %}

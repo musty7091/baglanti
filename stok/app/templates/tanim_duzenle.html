@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                {{ 'Tedarikçi' if type == 'tedarikci' else 'Ürün' }} Düzenle
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {% if type == 'tedarikci' %}
+                        <div class="mb-3">
+                            <label>Firma Adı</label>
+                            <input type="text" name="ad" value="{{ data['ad'] }}" class="form-control" required>
+                        </div>
+                    {% else %}
+                        <div class="mb-3">
+                            <label>Barkod</label>
+                            <input type="text" name="barkod" value="{{ data['barkod'] }}" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label>Ürün Adı</label>
+                            <input type="text" name="ad" value="{{ data['ad'] }}" class="form-control" required>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('main.tanimlar') }}" class="btn btn-secondary">İptal</a>
+                        <button type="submit" class="btn btn-warning">Değişiklikleri Kaydet</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

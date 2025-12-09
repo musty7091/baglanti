@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
     <div class="card-header bg-danger text-white">
-        <h4 class="mb-0">Mal Çekimi (Sevkiyat Girişi)</h4>
+        <h4 class="mb-0">Mal Çekimi (FIFO - Tekli)</h4>
     </div>
     <div class="card-body">
         <div class="alert alert-warning">
@@ -13,7 +13,7 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label>Hangi Tedarikçiden?</label>
-                    <select name="tedarikci_id" class="form-select" onchange="window.location.href='{{ url_for('main.mal_cek') }}?tedarikci_id=' + this.value" required>
+                    <select name="tedarikci_id" class="form-select select2" onchange="window.location.href='{{ url_for('main.mal_cek') }}?tedarikci_id=' + this.value" required>
                         <option value="">Seçiniz...</option>
                         {% for t in tedarikciler %}
                         <option value="{{ t['id'] }}" {% if secili_tedarikci == t['id'] %}selected{% endif %}>{{ t['ad'] }}</option>
@@ -23,7 +23,7 @@
                 
                 <div class="col-md-6 mb-3">
                     <label>Hangi Ürünü Çekiyorsun?</label>
-                    <select name="urun_id" class="form-select" required>
+                    <select name="urun_id" class="form-select select2" required>
                         <option value="">Seçiniz...</option>
                         {% for u in urunler %}
                             <option value="{{ u['id'] }}">{{ u['barkod'] }} - {{ u['ad'] }}</option>
@@ -50,7 +50,7 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label>İneceği Depo</label>
-                    <select name="depo" class="form-select" required>
+                    <select name="depo" class="form-select">
                         <option value="Magaza">Mağaza</option>
                         <option value="Depo1">Depo 1</option>
                         <option value="Depo2">Depo 2</option>

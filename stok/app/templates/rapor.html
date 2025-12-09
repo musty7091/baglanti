@@ -6,7 +6,7 @@
         <form action="{{ url_for('main.rapor') }}" method="GET" class="row g-3 align-items-end">
             <div class="col-md-4">
                 <label class="form-label">Tedarikçi Filtresi</label>
-                <select name="tedarikci" class="form-select">
+                <select name="tedarikci" class="form-select select2">
                     <option value="">Tümü</option>
                     {% for t in tedarikciler %}
                     <option value="{{ t['id'] }}" {% if secili_tedarikci|string == t['id']|string %}selected{% endif %}>{{ t['ad'] }}</option>
@@ -15,7 +15,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">Ürün Filtresi</label>
-                <select name="urun" class="form-select">
+                <select name="urun" class="form-select select2">
                     <option value="">Tümü</option>
                     {% for u in urunler %}
                     <option value="{{ u['id'] }}" {% if secili_urun|string == u['id']|string %}selected{% endif %}>{{ u['ad'] }}</option>

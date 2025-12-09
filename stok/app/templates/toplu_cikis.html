@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">Toplu Mal Çıkışı (Fatura Bazlı)</h4>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-secondary">
+            <small>ℹ️ Bu ekranda <b>FIFO kullanılmaz.</b> Seçtiğiniz faturadan direkt düşüm yapılır.</small>
+        </div>
+
+        <form action="{{ url_for('main.toplu_cikis_kaydet') }}" method="POST">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">İşlem Yapılacak Fatura</label>
+                    <select id="faturaSecim" class="form-select form-select-lg select2" onchange="faturaGetir()">
+                        <option value="">Seçiniz...</option>
+                        {% for f in faturalar %}
+                        <option value="{{ f['tedarikci_id'] }}|{{ f['fatura_no'] }}">
+                            {{ f['tedarikci_ad'] }} - {{ f['fatura_no'] }} ({{ f['tarih'] }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label>Sevk No</label>
+                            <input type="text" name="sevk_no" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Teslim Alan</label>
+                            <input type="text" name="teslim_alan" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Tarih</label>
+                            <input type="date" name="tarih" class="form-control" value="{{ bugun }}" required>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <label>Depo</label>
+                        <select name="depo" class="form-select">
+                            <option value="Magaza">Mağaza</option>
+                            <option value="Depo1">Depo 1</option>
+                            <option value="Depo2">Depo 2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="urunListesiArea" style="display:none;">
+                <h5 class="border-bottom pb-2">Fatura İçeriği</h5>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Barkod</th>
+                                <th>Ürün Adı</th>
+                                <th class="text-center">Mevcut Bakiye</th>
+                                <th style="width: 150px;">Çekilecek Adet</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            </tbody>
+                    </table>
+                </div>
+                
+                <button type="submit" class="btn btn-lg btn-danger w-100 mt-3">Seçilenleri Stoğu Düş</button>
+            </div>
+            
+            <div id="loading" class="text-center mt-5" style="display:none;">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p>Ürünler yükleniyor...</p>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Sayfa yüklendiğinde Select2 eventini dinle
+    document.addEventListener("DOMContentLoaded", function() {
+        // jQuery ile Select2 change eventini yakala (Daha stabil çalışır)
+        $('#faturaSecim').on('select2:select', function (e) {
+            faturaGetir();
+        });
+    });
+
+    function faturaGetir() {
+        const val = $('#faturaSecim').val(); // jQuery ile değer al
+        const listArea = document.getElementById('urunListesiArea');
+        const loading = document.getElementById('loading');
+        const tbody = document.getElementById('tableBody');
+
+        if (!val) {
+            listArea.style.display = 'none';
+            return;
+        }
+
+        const parts = val.split('|');
+        const tedarikci_id = parts[0];
+        const fatura_no = parts[1];
+
+        listArea.style.display = 'none';
+        loading.style.display = 'block';
+        tbody.innerHTML = '';
+
+        fetch('/api/fatura-detay', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ tedarikci_id: tedarikci_id, fatura_no: fatura_no })
+        })
+        .then(response => response.json())
+        .then(data => {
+            loading.style.display = 'none';
+            if (data.length > 0) {
+                listArea.style.display = 'block';
+                
+                data.forEach(item => {
+                    const row = `
+                        <tr>
+                            <td>${item.barkod}</td>
+                            <td>${item.urun_ad}</td>
+                            <td class="text-center fw-bold">${item.kalan_adet}</td>
+                            <td>
+                                <input type="hidden" name="fatura_id[]" value="${item.fatura_id}">
+                                <input type="number" name="adet[]" class="form-control border-danger fw-bold" 
+                                       placeholder="0" min="0" max="${item.kalan_adet}">
+                            </td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+            } else {
+                alert("Bu faturada çekilecek ürün kalmamış!");
+            }
+        });
+    }
+</script>
+{% endblock %}
