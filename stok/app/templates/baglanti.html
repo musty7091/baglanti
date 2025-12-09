@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">Yeni Bağlantı Girişi (Mal Alımı)</h4>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <small>💡 Buraya girdiğin mallar <b>Tedarikçi Bakiyesine</b> eklenecektir. Fiziksel stoğa henüz girmez.</small>
+        </div>
+        <form action="{{ url_for('main.baglanti_kaydet') }}" method="POST">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label>Tedarikçi Seç</label>
+                    <select name="tedarikci_id" class="form-select" required>
+                        <option value="">Seçiniz...</option>
+                        {% for t in tedarikciler %}
+                        <option value="{{ t['id'] }}">{{ t['ad'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label>Fatura No / Belge No</label>
+                    <input type="text" name="fatura_no" class="form-control" required>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label>Ürün Seç</label>
+                    <select name="urun_id" class="form-select" required>
+                        <option value="">Seçiniz...</option>
+                        {% for u in urunler %}
+                        <option value="{{ u['id'] }}">{{ u['barkod'] }} - {{ u['ad'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label>Fatura Tarihi</label>
+                    <input type="date" name="tarih" class="form-control" value="{{ bugun }}" required>
+                </div>
+            </div>
+
+            <hr>
+            <h6>Maliyet Hesaplama</h6>
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label>Adet (Miktar)</label>
+                    <input type="number" name="adet" class="form-control" required min="1">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label>Birim Fiyat (KDV Hariç)</label>
+                    <input type="number" step="0.01" name="fiyat" class="form-control" required>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label>İskonto (%)</label>
+                    <input type="number" step="0.01" name="iskonto" class="form-control" value="0">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label>KDV (%)</label>
+                    <input type="number" step="0.01" name="kdv" class="form-control" value="20">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-lg btn-success w-100">Bağlantıyı Kaydet</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

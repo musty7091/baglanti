@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary h-100">
+            <div class="card-body">
+                <h5 class="card-title">Bekleyen Stok</h5>
+                <h2 class="display-6">{{ toplam_adet }} Adet</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-success h-100">
+            <div class="card-body">
+                <h5 class="card-title">Toplam Değer</h5>
+                <h2 class="display-6">{{ "{:,.2f}".format(toplam_tutar) }} TL</h2>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">Tedarikçi Özeti</div>
+            <div class="card-body">
+                <table class="table">
+                    <thead><tr><th>Tedarikçi</th><th>Adet</th><th>Değer</th><th>İşlem</th></tr></thead>
+                    <tbody>
+                        {% for row in ozet %}
+                        <tr>
+                            <td>{{ row[0] }}</td>
+                            <td>{{ row[1] }}</td>
+                            <td>{{ "{:,.2f}".format(row[2]) }} TL</td>
+                            <td><a href="{{ url_for('main.mal_cek', tedarikci_id=row[3]) }}" class="btn btn-sm btn-outline-primary">Mal Çek</a></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

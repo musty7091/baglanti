@@ -1,0 +1,20 @@
+--- KURULUM VE ÇALIŞTIRMA ---
+
+1. Terminali açın ve proje klasörüne girin:
+   cd stok_projesi_v2
+
+2. (Opsiyonel ama önerilir) Sanal ortam oluşturun:
+   python -m venv venv
+   # Windows için:
+   venv\Scripts\activate
+   # Mac/Linux için:
+   source venv/bin/activate
+
+3. Gerekli paketleri yükleyin:
+   pip install -r requirements.txt
+
+4. Projeyi çalıştırın:
+   python run.py
+
+5. Tarayıcınızda şu adresi açın:
+   http://127.0.0.1:5000/

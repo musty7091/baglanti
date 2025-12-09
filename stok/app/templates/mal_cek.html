@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">Mal Çekimi (Sevkiyat Girişi)</h4>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning">
+            <small>⚠️ <b>FIFO Modu Aktif:</b> Çekeceğiniz miktar, otomatik olarak en eski tarihli faturadan başlayarak düşülecektir.</small>
+        </div>
+        
+        <form action="{{ url_for('main.mal_cek_kaydet') }}" method="POST">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label>Hangi Tedarikçiden?</label>
+                    <select name="tedarikci_id" class="form-select" onchange="window.location.href='{{ url_for('main.mal_cek') }}?tedarikci_id=' + this.value" required>
+                        <option value="">Seçiniz...</option>
+                        {% for t in tedarikciler %}
+                        <option value="{{ t['id'] }}" {% if secili_tedarikci == t['id'] %}selected{% endif %}>{{ t['ad'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label>Hangi Ürünü Çekiyorsun?</label>
+                    <select name="urun_id" class="form-select" required>
+                        <option value="">Seçiniz...</option>
+                        {% for u in urunler %}
+                            <option value="{{ u['id'] }}">{{ u['barkod'] }} - {{ u['ad'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label>Çekilecek Miktar</label>
+                    <input type="number" name="adet" class="form-control" required min="1">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label>Sevk Fişi / İrsaliye No</label>
+                    <input type="text" name="sevk_no" class="form-control" required>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label>Teslim Alan Personel</label>
+                    <input type="text" name="teslim_alan" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label>İneceği Depo</label>
+                    <select name="depo" class="form-select" required>
+                        <option value="Magaza">Mağaza</option>
+                        <option value="Depo1">Depo 1</option>
+                        <option value="Depo2">Depo 2</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label>İşlem Tarihi</label>
+                    <input type="date" name="tarih" class="form-control" value="{{ bugun }}" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-lg btn-danger w-100">Stoktan Düş ve Kaydet</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
