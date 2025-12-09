@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <div class="row g-3 mb-4">
     <div class="col-md-4">
         <div class="card text-white bg-primary h-100 shadow-sm">
@@ -23,15 +25,15 @@
         <div class="card text-white bg-success h-100 shadow-sm">
             <div class="card-body d-flex flex-column justify-content-center">
                 <h6 class="card-title text-uppercase opacity-75">Toplam Parasal Değer</h6>
-                <h2 class="display-5 fw-bold mb-0">{{ "{:,.2f}".format(toplam_tutar) }} <span class="fs-6">TL</span></h2>
+                <h2 class="display-5 fw-bold mb-0">{{ toplam_tutar | money }} <span class="fs-6">TL</span></h2>
             </div>
         </div>
     </div>
 </div>
 
 <div class="row">
-    <div class="col-md-12">
-        <div class="card shadow-sm border-0">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0 h-100">
             <div class="card-header bg-white border-bottom py-3">
                 <h5 class="mb-0 text-secondary">📊 Tedarikçi Bazlı Stok Durumu</h5>
             </div>
@@ -41,7 +43,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th class="ps-4">Tedarikçi</th>
-                                <th class="text-center">Toplam Adet</th>
+                                <th class="text-center">Adet</th>
                                 <th class="text-end">Bağlantı Değeri</th>
                                 <th class="text-end pe-4">İşlem</th>
                             </tr>
@@ -51,12 +53,12 @@
                             <tr>
                                 <td class="ps-4 fw-bold text-primary">{{ row[0] }}</td>
                                 <td class="text-center">
-                                    <span class="badge bg-light text-dark border px-3 py-2 fs-6">{{ row[1] }}</span>
+                                    <span class="badge bg-light text-dark border px-2 py-1">{{ row[1] }}</span>
                                 </td>
-                                <td class="text-end fw-bold text-success">{{ "{:,.2f}".format(row[2]) }} TL</td>
+                                <td class="text-end fw-bold text-success">{{ row[2] | money }} TL</td>
                                 <td class="text-end pe-4">
                                     <div class="btn-group">
-                                        <a href="{{ url_for('main.mal_cek', tedarikci_id=row[3]) }}" class="btn btn-sm btn-outline-primary">Mal Çek</a>
+                                        <a href="{{ url_for('main.mal_cek', tedarikci_id=row[3]) }}" class="btn btn-sm btn-outline-primary">Çek</a>
                                         <a href="{{ url_for('main.rapor', tedarikci=row[3]) }}" class="btn btn-sm btn-outline-secondary">Detay</a>
                                     </div>
                                 </td>
@@ -74,5 +76,76 @@
             </div>
         </div>
     </div>
+
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-white border-bottom py-3">
+                <h5 class="mb-0 text-secondary">🍰 Stok Dağılımı (TL)</h5>
+            </div>
+            <div class="card-body d-flex align-items-center justify-content-center">
+                <canvas id="supplierChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Backend'den gelen verileri JavaScript dizilerine çeviriyoruz
+        const labels = [{% for row in ozet %}"{{ row[0] }}",{% endfor %}];
+        const dataValues = [{% for row in ozet %}{{ row[2] }},{% endfor %}];
+
+        // Eğer veri yoksa grafik oluşturma
+        if (labels.length === 0) {
+            document.getElementById('supplierChart').parentElement.innerHTML = "<p class='text-muted'>Görüntülenecek veri yok.</p>";
+            return;
+        }
+
+        const ctx = document.getElementById('supplierChart').getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'doughnut', // 'pie' yerine daha şık duran 'doughnut' seçtik
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: [
+                        '#0d6efd', '#6610f2', '#6f42c1', '#d63384', '#dc3545', 
+                        '#fd7e14', '#ffc107', '#198754', '#20c997', '#0dcaf0'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            // Tooltip'te TL formatı göstermek için
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed !== null) {
+                                    // Türk Lirası formatı
+                                    label += new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(context.parsed);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
 {% endblock %}

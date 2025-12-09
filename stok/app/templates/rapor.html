@@ -46,7 +46,6 @@
                         <th>Birim Maliyet (Net)</th>
                         <th>Kalan (Alacak)</th>
                         <th>Bakiye Değeri</th>
-                        <th class="no-print" style="width: 100px;">İşlem</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -59,23 +58,18 @@
                             <small class="text-muted">{{ row['tarih'] }}</small>
                         </td>
                         <td class="text-center">{{ row['toplam_adet'] }}</td>
-                        <td class="text-end">{{ "{:,.2f}".format(row['net_maliyet']) }} TL</td>
+                        <td class="text-end">{{ row['net_maliyet'] | money }} TL</td>
                         <td class="text-center fw-bold text-danger">{{ row['kalan'] }}</td>
-                        <td class="text-end fw-bold">{{ "{:,.2f}".format(row['net_maliyet'] * row['kalan']) }} TL</td>
-                        <td class="no-print">
-                            <a href="{{ url_for('main.fatura_duzenle', id=row['id']) }}" class="btn btn-sm btn-warning mb-1 w-100">Düzenle</a>
-                            <a href="{{ url_for('main.fatura_sil', id=row['id']) }}" class="btn btn-sm btn-danger w-100" onclick="return confirm('Bu faturayı silmek istediğinize emin misiniz?');">Sil</a>
-                        </td>
+                        <td class="text-end fw-bold">{{ (row['net_maliyet'] * row['kalan']) | money }} TL</td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="8" class="text-center">Filtre kriterlerine uygun aktif bakiye bulunamadı.</td></tr>
+                    <tr><td colspan="7" class="text-center">Filtre kriterlerine uygun aktif bakiye bulunamadı.</td></tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-secondary">
                     <tr>
                         <th colspan="6" class="text-end">GENEL TOPLAM DEĞER:</th>
-                        <th class="text-end">{{ "{:,.2f}".format(genel_toplam) }} TL</th>
-                        <th></th>
+                        <th class="text-end">{{ genel_toplam | money }} TL</th>
                     </tr>
                 </tfoot>
             </table>
@@ -122,9 +116,9 @@
 </div>
 
 <div class="card">
-    <div class="card-header">Son Sevk Hareketleri (Log)</div>
+    <div class="card-header">Son Sevk Hareketleri (Log) - <small>Hatalı işlemleri buradan silebilirsiniz.</small></div>
     <div class="card-body">
-         <table class="table table-sm">
+         <table class="table table-sm table-hover">
             <thead>
                 <tr>
                     <th>Tarih</th>
@@ -134,6 +128,7 @@
                     <th>Sevk No</th>
                     <th>Depo</th>
                     <th>Teslim Alan</th>
+                    <th class="text-end">İşlem</th>
                 </tr>
             </thead>
             <tbody>
@@ -146,6 +141,13 @@
                     <td>{{ log['sevk_no'] }}</td>
                     <td>{{ log['depo'] }}</td>
                     <td>{{ log['alan'] }}</td>
+                    <td class="text-end">
+                        <a href="{{ url_for('main.hareket_sil', id=log['id']) }}" 
+                           class="btn btn-sm btn-outline-danger"
+                           onclick="return confirm('BU HAREKETİ SİLİP STOKU İADE ETMEK İSTEDİĞİNİZE EMİN MİSİNİZ?');">
+                           Sil / Geri Al
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

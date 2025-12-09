@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card mb-3 no-print">
+    <div class="card-body bg-light">
+        <form action="{{ url_for('main.faturalar') }}" method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Tedarikçi</label>
+                <select name="tedarikci_id" class="form-select select2">
+                    <option value="">Tümü</option>
+                    {% for t in tedarikciler %}
+                    <option value="{{ t['id'] }}" {% if secili_tedarikci|string == t['id']|string %}selected{% endif %}>{{ t['ad'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Başlangıç Tarihi</label>
+                <input type="date" name="tarih_bas" class="form-control" value="{{ tarih_bas }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Bitiş Tarihi</label>
+                <input type="date" name="tarih_bit" class="form-control" value="{{ tarih_bit }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">Filtrele</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">📄 Fatura Listesi (Özet)</h4>
+        <a href="{{ url_for('main.baglanti_yap') }}" class="btn btn-success btn-sm">+ Yeni Fatura Gir</a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Fatura No</th>
+                        <th>Tedarikçi</th>
+                        <th class="text-center">Kalem Sayısı</th>
+                        <th>Genel Durum</th>
+                        <th class="text-end">Toplam Tutar</th>
+                        <th class="text-end">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in faturalar %}
+                    {% set yuzde = 0 %}
+                    {% if f['genel_toplam_adet'] > 0 %}
+                        {% set yuzde = (f['genel_kalan_adet'] / f['genel_toplam_adet'] * 100) | int %}
+                    {% endif %}
+                    
+                    <tr class="{{ 'table-secondary opacity-75' if f['genel_kalan_adet'] == 0 else '' }}">
+                        <td>{{ f['tarih'] }}</td>
+                        <td class="fw-bold">{{ f['fatura_no'] }}</td>
+                        <td class="text-primary fw-bold">{{ f['tedarikci_ad'] }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-info text-dark">{{ f['kalem_sayisi'] }} Çeşit</span>
+                        </td>
+                        <td style="width: 20%;">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="badge bg-{{ 'secondary' if f['genel_kalan_adet'] == 0 else 'success' }}">
+                                    {{ f['genel_kalan_adet'] }} / {{ f['genel_toplam_adet'] }} Adet
+                                </span>
+                                <small class="text-muted">%{{ yuzde }}</small>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-{{ 'danger' if yuzde < 20 else ('warning' if yuzde < 50 else 'success') }}" 
+                                     role="progressbar" style="width: {{ yuzde }}%"></div>
+                            </div>
+                        </td>
+                        <td class="text-end fw-bold">{{ f['fatura_toplam_tutar'] | money }} TL</td>
+                        <td class="text-end">
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-outline-primary" 
+                                        onclick="showDetails('{{ f['tedarikci_id'] }}', '{{ f['fatura_no'] }}', '{{ f['tedarikci_ad'] }}')">
+                                    🔍 Detay
+                                </button>
+                                
+                                <form action="{{ url_for('main.fatura_sil_komple') }}" method="POST" onsubmit="return confirm('BU FATURAYI VE İÇİNDEKİ TÜM ÜRÜNLERİ SİLMEK İSTEDİĞİNİZE EMİN MİSİNİZ?');" style="display:inline;">
+                                    <input type="hidden" name="tedarikci_id" value="{{ f['tedarikci_id'] }}">
+                                    <input type="hidden" name="fatura_no" value="{{ f['fatura_no'] }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">🗑️ Sil</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted">Kayıtlı fatura bulunamadı.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="modalTitle">Fatura Detayı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+                <table class="table table-sm table-bordered" id="modalTable" style="display:none;">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Barkod</th>
+                            <th>Ürün Adı</th>
+                            <th>Birim Maliyet</th>
+                            <th>Kalan</th>
+                            <th class="text-center">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showDetails(tedarikci_id, fatura_no, tedarikci_ad) {
+    const modal = new bootstrap.Modal(document.getElementById('detailModal'));
+    document.getElementById('modalTitle').innerText = `${tedarikci_ad} - Fatura: ${fatura_no}`;
+    
+    document.getElementById('modalLoading').style.display = 'block';
+    document.getElementById('modalTable').style.display = 'none';
+    const tbody = document.getElementById('modalBody');
+    tbody.innerHTML = '';
+    
+    modal.show();
+
+    fetch('/api/fatura-detay', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tedarikci_id: tedarikci_id, fatura_no: fatura_no })
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('modalLoading').style.display = 'none';
+        document.getElementById('modalTable').style.display = 'table';
+        
+        data.forEach(item => {
+            let maliyet = parseFloat(item.net_maliyet).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            
+            const row = `
+                <tr>
+                    <td><small>${item.barkod}</small></td>
+                    <td>${item.urun_ad}</td>
+                    <td class="text-end">${maliyet} TL</td>
+                    <td class="text-center fw-bold">${item.kalan_adet}</td>
+                    <td class="text-center">
+                        <a href="/fatura-duzenle/${item.fatura_id}" class="btn btn-sm btn-warning py-0">Düzenle</a>
+                    </td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    });
+}
+</script>
+{% endblock %}

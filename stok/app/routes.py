@@ -33,13 +33,11 @@ def logout():
 @main.route('/')
 @login_required
 def index():
-    # Artık 4 değer dönüyor
     toplam_adet, toplam_tutar, toplam_cesit, ozet = DatabaseManager.get_dashboard_stats()
-    
     return render_template('dashboard.html', 
                          toplam_adet=toplam_adet, 
                          toplam_tutar=toplam_tutar, 
-                         toplam_cesit=toplam_cesit, # Yeni veri
+                         toplam_cesit=toplam_cesit,
                          ozet=ozet)
 
 # --- TANIMLAR ---
@@ -147,13 +145,14 @@ def baglanti_kaydet():
             'iskonto': iskontolar[i] or 0,
             'kdv': kdvler[i] or 20
         }
+        # Negatif kontrolü model içinde yapılıyor
         DatabaseManager.add_baglanti(data)
         kayit_sayisi += 1
         
     flash(f"{kayit_sayisi} kalem ürün başarıyla kaydedildi.", 'success')
     return redirect(url_for('main.baglanti_yap'))
 
-# --- MAL ÇIKIŞI (FIFO & TOPLU) ---
+# --- MAL ÇIKIŞI ---
 @main.route('/mal-cek')
 @login_required
 def mal_cek():
@@ -192,6 +191,14 @@ def toplu_cikis_kaydet():
     success, msg = DatabaseManager.process_invoice_bulk_sevkiyat(request.form)
     flash(msg, 'success' if success else 'danger')
     return redirect(url_for('main.index') if success else url_for('main.toplu_cikis'))
+
+# --- HAREKET SİLME (GERİ ALMA) ---
+@main.route('/hareket-sil/<int:id>')
+@login_required
+def hareket_sil(id):
+    success, msg = DatabaseManager.delete_movement(id)
+    flash(msg, 'success' if success else 'danger')
+    return redirect(url_for('main.rapor'))
 
 # --- RAPOR & DÜZENLEME ---
 @main.route('/rapor')
@@ -240,7 +247,7 @@ def rapor():
     gecmis_data = conn.execute(sql_gecmis, params_gecmis).fetchall()
     
     base_hareket = '''
-        SELECT h.tarih, t.ad as tedarikci, u.ad as urun, h.adet, h.sevk_no, h.depo, h.teslim_alan as alan
+        SELECT h.id, h.tarih, t.ad as tedarikci, u.ad as urun, h.adet, h.sevk_no, h.depo, h.teslim_alan as alan
         FROM hareketler h
         JOIN tedarikciler t ON h.tedarikci_id = t.id
         JOIN urunler u ON h.urun_id = u.id
@@ -278,3 +285,36 @@ def fatura_duzenle(id):
         return redirect(url_for('main.rapor') if success else url_for('main.fatura_duzenle', id=id))
     fatura = DatabaseManager.get_fatura(id)
     return render_template('fatura_duzenle.html', f=fatura)
+
+# --- FATURALAR (Filtreli) ---
+@main.route('/faturalar')
+@login_required
+def faturalar():
+    tedarikci_id = request.args.get('tedarikci_id')
+    tarih_bas = request.args.get('tarih_bas')
+    tarih_bit = request.args.get('tarih_bit')
+    
+    # Filtreli fonksiyonu çağır
+    grouped_invoices = DatabaseManager.get_all_invoices_grouped(tedarikci_id, tarih_bas, tarih_bit)
+    
+    # Filtre için tedarikçi listesi lazım
+    conn = DatabaseManager.get_db_connection()
+    tedarikciler = conn.execute("SELECT * FROM tedarikciler ORDER BY ad").fetchall()
+    conn.close()
+    
+    return render_template('faturalar.html', 
+                         faturalar=grouped_invoices, 
+                         tedarikciler=tedarikciler,
+                         secili_tedarikci=tedarikci_id,
+                         tarih_bas=tarih_bas,
+                         tarih_bit=tarih_bit)
+
+@main.route('/fatura-sil-komple', methods=['POST'])
+@login_required
+def fatura_sil_komple():
+    tedarikci_id = request.form.get('tedarikci_id')
+    fatura_no = request.form.get('fatura_no')
+    
+    success, msg = DatabaseManager.delete_invoice_whole(tedarikci_id, fatura_no)
+    flash(msg, 'success' if success else 'danger')
+    return redirect(url_for('main.faturalar'))
