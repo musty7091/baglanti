@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">📥 Excel ile Toplu Giriş</h4>
+                <a href="{{ url_for('main.sablon_indir') }}" class="btn btn-light btn-sm text-success fw-bold">
+                    📄 Boş Şablon İndir
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>Bilgi:</strong> Yüklediğiniz Excel dosyasındaki ürünler sistemde kayıtlı değilse, 
+                    sistem bunları <b>otomatik olarak yeni ürün</b> olarak kaydedecektir.
+                </div>
+
+                <h5 class="mt-4">1. Excel Şablonu Hazırlama</h5>
+                <p>Excel dosyanızın ilk satırı (başlıklar) tam olarak aşağıdaki gibi olmalıdır:</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm text-center bg-light">
+                        <thead>
+                            <tr>
+                                <th>barkod</th>
+                                <th>urun_adi</th>
+                                <th>tedarikci</th>
+                                <th>fatura_no</th>
+                                <th>tarih</th>
+                                <th>adet</th>
+                                <th class="table-warning">birim_fiyat</th>
+                                <th class="table-warning">iskonto</th>
+                                <th class="table-warning">kdv</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>8690001...</td>
+                                <td>Örnek Ürün</td>
+                                <td>Tedarikçi A.Ş</td>
+                                <td>FAT123</td>
+                                <td>2023-12-09</td>
+                                <td>100</td>
+                                <td class="fw-bold">100.00</td>
+                                <td class="fw-bold">10</td>
+                                <td class="fw-bold">20</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <small class="text-muted">
+                    * <b>birim_fiyat:</b> Liste fiyatıdır.<br>
+                    * <b>iskonto:</b> Yüzde olarak girin (Örn: 10). Yoksa 0 yazın.<br>
+                    * <b>kdv:</b> Yüzde olarak girin (Örn: 20).
+                </small>
+
+                <h5 class="mt-4">2. Dosya Yükle</h5>
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="formFile" class="form-label">Hazırladığınız Excel Dosyasını Seçin</label>
+                        <input class="form-control" type="file" id="formFile" name="file" accept=".xlsx, .xls" required>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Yüklemeyi Başlat</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

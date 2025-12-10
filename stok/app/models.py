@@ -1,6 +1,6 @@
 import sqlite3
-import os       # EKLENDİ: Klasör işlemleri için
-import shutil   # EKLENDİ: Dosya kopyalamak için
+import os
+import shutil
 from datetime import datetime
 from flask import current_app
 from flask_login import UserMixin
@@ -53,28 +53,96 @@ class DatabaseManager:
         conn.commit()
         conn.close()
 
+    # --- EXCEL İLE TOPLU YÜKLEME (AKILLI IMPORT) ---
+    @staticmethod
+    def import_from_excel(filepath):
+        import pandas as pd
+        
+        conn = DatabaseManager.get_db_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Excel dosyasını oku
+            df = pd.read_excel(filepath)
+            
+            # Sütun isimlerini küçük harfe çevir ve boşlukları temizle
+            df.columns = [str(c).lower().strip() for c in df.columns]
+            
+            # GÜNCELLENEN ZORUNLU SÜTUNLAR
+            required_cols = ['barkod', 'urun_adi', 'tedarikci', 'fatura_no', 'tarih', 'adet', 'birim_fiyat', 'iskonto', 'kdv']
+            
+            for col in required_cols:
+                if col not in df.columns:
+                    return False, f"Excel dosyasında '{col}' sütunu bulunamadı! Lütfen güncel şablonu kullanın."
+
+            kayit_sayisi = 0
+            yeni_urun_sayisi = 0
+            
+            for index, row in df.iterrows():
+                # 1. Verileri al ve temizle
+                barkod = str(row['barkod']).strip()
+                urun_adi = str(row['urun_adi']).strip()
+                tedarikci_adi = str(row['tedarikci']).strip()
+                fatura_no = str(row['fatura_no']).strip()
+                tarih = str(row['tarih']).split()[0]
+                adet = int(row['adet'])
+                
+                # Fiyat Hesaplama Bileşenleri
+                birim_fiyat = float(row['birim_fiyat'])
+                iskonto = float(row['iskonto']) if pd.notna(row['iskonto']) else 0
+                kdv = float(row['kdv']) if pd.notna(row['kdv']) else 20
+
+                # 2. TEDARİKÇİ KONTROLÜ (Yoksa Oluştur)
+                ted_row = cursor.execute("SELECT id FROM tedarikciler WHERE ad = ?", (tedarikci_adi,)).fetchone()
+                if ted_row:
+                    tedarikci_id = ted_row['id']
+                else:
+                    cursor.execute("INSERT INTO tedarikciler (ad) VALUES (?)", (tedarikci_adi,))
+                    tedarikci_id = cursor.lastrowid
+
+                # 3. ÜRÜN KONTROLÜ (Yoksa Oluştur)
+                urun_row = cursor.execute("SELECT id FROM urunler WHERE barkod = ?", (barkod,)).fetchone()
+                if urun_row:
+                    urun_id = urun_row['id']
+                else:
+                    cursor.execute("INSERT INTO urunler (barkod, ad) VALUES (?, ?)", (barkod, urun_adi))
+                    urun_id = cursor.lastrowid
+                    yeni_urun_sayisi += 1
+
+                # 4. MALİYET HESAPLAMA (Otomatik)
+                iskontolu_fiyat = birim_fiyat - (birim_fiyat * iskonto / 100)
+                net_maliyet = iskontolu_fiyat * (1 + kdv / 100)
+
+                # 5. FATURA KAYDI
+                # Not: Aynı fatura içinde aynı ürün varsa mükerrerlik kontrolü burada yapılabilir.
+                # Şimdilik direkt ekliyoruz.
+                cursor.execute('''
+                    INSERT INTO faturalar (tedarikci_id, urun_id, fatura_no, tarih, toplam_adet, kalan_adet, net_maliyet)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (tedarikci_id, urun_id, fatura_no, tarih, adet, adet, net_maliyet))
+                
+                kayit_sayisi += 1
+
+            conn.commit()
+            conn.close()
+            return True, f"{kayit_sayisi} kalem işlendi. {yeni_urun_sayisi} yeni ürün tanımlandı."
+
+        except Exception as e:
+            conn.close()
+            return False, f"Hata oluştu: {str(e)}"
+
     # --- YEDEKLEME SİSTEMİ ---
     @staticmethod
     def backup_db():
-        """
-        Veritabanı dosyasını 'yedekler' klasörüne kopyalar.
-        """
         db_name = current_app.config['DB_NAME']
-        
-        # 1. Yedek klasörü yoksa oluştur
         backup_folder = "yedekler"
         if not os.path.exists(backup_folder):
             os.makedirs(backup_folder)
-            
-        # 2. Dosya ismini oluştur (Örn: stok_takip_2023-12-09_14-30-00.db)
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         backup_name = f"{db_name.split('.')[0]}_{timestamp}.db"
         destination = os.path.join(backup_folder, backup_name)
-        
-        # 3. Kopyala
         try:
             shutil.copy2(db_name, destination)
-            # Eski yedekleri temizle (İsteğe bağlı: Son 30 yedeği tut)
             DatabaseManager.clean_old_backups(backup_folder, keep=30)
             return True, f"Yedek alındı: {backup_name}"
         except Exception as e:
@@ -82,37 +150,25 @@ class DatabaseManager:
 
     @staticmethod
     def clean_old_backups(folder, keep=30):
-        """
-        Klasördeki en eski dosyaları siler, sadece son 'keep' kadarını tutar.
-        """
         try:
             files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith('.db')]
-            # Dosyaları oluşturulma tarihine göre sırala (Eskiden yeniye)
             files.sort(key=os.path.getctime)
-            
             if len(files) > keep:
-                # Silinecekleri belirle
                 files_to_delete = files[:len(files) - keep]
                 for f in files_to_delete:
-                    try:
-                        os.remove(f)
-                        print(f"Eski yedek silindi: {f}")
-                    except:
-                        pass
+                    try: os.remove(f)
+                    except: pass
         except Exception as e:
             print(f"Yedek temizleme hatası: {e}")
 
-    # --- FATURA LİSTELEME ---
+    # --- DİĞER STANDART FONKSİYONLAR ---
     @staticmethod
     def get_all_invoices_grouped(tedarikci_id=None, tarih_bas=None, tarih_bit=None):
         conn = DatabaseManager.get_db_connection()
         base_sql = '''
-            SELECT 
-                f.fatura_no, f.tarih, f.tedarikci_id, t.ad as tedarikci_ad,
-                COUNT(f.id) as kalem_sayisi,
-                SUM(f.toplam_adet) as genel_toplam_adet,
-                SUM(f.kalan_adet) as genel_kalan_adet,
-                SUM(f.toplam_adet * f.net_maliyet) as fatura_toplam_tutar
+            SELECT f.fatura_no, f.tarih, f.tedarikci_id, t.ad as tedarikci_ad,
+                COUNT(f.id) as kalem_sayisi, SUM(f.toplam_adet) as genel_toplam_adet,
+                SUM(f.kalan_adet) as genel_kalan_adet, SUM(f.toplam_adet * f.net_maliyet) as fatura_toplam_tutar
             FROM faturalar f
             JOIN tedarikciler t ON f.tedarikci_id = t.id
             WHERE 1=1
@@ -127,7 +183,6 @@ class DatabaseManager:
         if tarih_bit:
             base_sql += " AND f.tarih <= ?"
             params.append(tarih_bit)
-            
         base_sql += " GROUP BY f.fatura_no, f.tedarikci_id ORDER BY f.tarih DESC"
         rows = conn.execute(base_sql, params).fetchall()
         conn.close()
@@ -136,28 +191,21 @@ class DatabaseManager:
     @staticmethod
     def delete_invoice_whole(tedarikci_id, fatura_no):
         conn = DatabaseManager.get_db_connection()
-        check = conn.execute('''
-            SELECT COUNT(*) FROM faturalar 
-            WHERE tedarikci_id = ? AND fatura_no = ? AND toplam_adet != kalan_adet
-        ''', (tedarikci_id, fatura_no)).fetchone()[0]
-        
+        check = conn.execute('SELECT COUNT(*) FROM faturalar WHERE tedarikci_id = ? AND fatura_no = ? AND toplam_adet != kalan_adet', (tedarikci_id, fatura_no)).fetchone()[0]
         if check > 0:
             conn.close()
-            return False, "Bu faturanın içindeki bazı ürünlerden sevkiyat yapılmış! Silinemez."
-        
+            return False, "Sevkiyat yapılmış fatura silinemez."
         conn.execute('DELETE FROM faturalar WHERE tedarikci_id = ? AND fatura_no = ?', (tedarikci_id, fatura_no))
         conn.commit()
         conn.close()
-        return True, "Fatura ve içeriği tamamen silindi."
+        return True, "Fatura silindi."
 
-    # --- KULLANICI İŞLEMLERİ ---
     @staticmethod
     def get_user_by_id(user_id):
         conn = DatabaseManager.get_db_connection()
         user_data = conn.execute("SELECT * FROM kullanicilar WHERE id = ?", (user_id,)).fetchone()
         conn.close()
-        if user_data:
-            return User(user_data['id'], user_data['username'], user_data['password'])
+        if user_data: return User(user_data['id'], user_data['username'], user_data['password'])
         return None
 
     @staticmethod
@@ -165,29 +213,19 @@ class DatabaseManager:
         conn = DatabaseManager.get_db_connection()
         user_data = conn.execute("SELECT * FROM kullanicilar WHERE username = ?", (username,)).fetchone()
         conn.close()
-        if user_data:
-            return User(user_data['id'], user_data['username'], user_data['password'])
+        if user_data: return User(user_data['id'], user_data['username'], user_data['password'])
         return None
 
-    # --- DASHBOARD ---
     @staticmethod
     def get_dashboard_stats():
         conn = DatabaseManager.get_db_connection()
         toplam_adet = conn.execute("SELECT SUM(kalan_adet) FROM faturalar").fetchone()[0] or 0
         toplam_tutar = conn.execute("SELECT SUM(kalan_adet * net_maliyet) FROM faturalar").fetchone()[0] or 0
         toplam_cesit = conn.execute("SELECT COUNT(DISTINCT urun_id) FROM faturalar WHERE kalan_adet > 0").fetchone()[0] or 0
-        
-        ozet = conn.execute('''
-            SELECT t.ad, SUM(f.kalan_adet), SUM(f.kalan_adet * f.net_maliyet), t.id
-            FROM faturalar f
-            JOIN tedarikciler t ON f.tedarikci_id = t.id
-            WHERE f.kalan_adet > 0
-            GROUP BY t.id
-        ''').fetchall()
+        ozet = conn.execute('SELECT t.ad, SUM(f.kalan_adet), SUM(f.kalan_adet * f.net_maliyet), t.id FROM faturalar f JOIN tedarikciler t ON f.tedarikci_id = t.id WHERE f.kalan_adet > 0 GROUP BY t.id').fetchall()
         conn.close()
         return toplam_adet, toplam_tutar, toplam_cesit, ozet
 
-    # --- GİRİŞ İŞLEMLERİ ---
     @staticmethod
     def add_baglanti(data):
         adet = int(data['adet'])
@@ -196,77 +234,49 @@ class DatabaseManager:
         if fiyat < 0: return 0
         iskonto = float(data['iskonto'])
         kdv = float(data['kdv'])
-        
         iskontolu_fiyat = fiyat - (fiyat * iskonto / 100)
         net_maliyet = iskontolu_fiyat * (1 + kdv / 100)
-        
         conn = DatabaseManager.get_db_connection()
-        conn.execute('''
-            INSERT INTO faturalar (tedarikci_id, urun_id, fatura_no, tarih, toplam_adet, kalan_adet, net_maliyet)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (data['tedarikci_id'], data['urun_id'], data['fatura_no'], data['tarih'], adet, adet, net_maliyet))
+        conn.execute('INSERT INTO faturalar (tedarikci_id, urun_id, fatura_no, tarih, toplam_adet, kalan_adet, net_maliyet) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+                     (data['tedarikci_id'], data['urun_id'], data['fatura_no'], data['tarih'], adet, adet, net_maliyet))
         conn.commit()
         conn.close()
         return net_maliyet
 
-    # --- SEVKİYAT ---
     @staticmethod
     def process_sevkiyat(data):
         cekilecek = int(data['adet'])
         if cekilecek < 1: return False, "Geçersiz miktar."
-
         conn = DatabaseManager.get_db_connection()
-        faturalar = conn.execute('''
-            SELECT * FROM faturalar 
-            WHERE tedarikci_id = ? AND urun_id = ? AND kalan_adet > 0
-            ORDER BY tarih ASC, id ASC
-        ''', (data['tedarikci_id'], data['urun_id'])).fetchall()
-        
+        faturalar = conn.execute('SELECT * FROM faturalar WHERE tedarikci_id = ? AND urun_id = ? AND kalan_adet > 0 ORDER BY tarih ASC, id ASC', (data['tedarikci_id'], data['urun_id'])).fetchall()
         toplam_bakiye = sum(f['kalan_adet'] for f in faturalar)
         if toplam_bakiye < cekilecek:
             conn.close()
             return False, f"Yetersiz Bakiye! Mevcut: {toplam_bakiye}"
-            
         kalan_istenen = cekilecek
         for fatura in faturalar:
             if kalan_istenen <= 0: break
             mevcut = fatura['kalan_adet']
             dusulecek = min(mevcut, kalan_istenen)
             conn.execute('UPDATE faturalar SET kalan_adet = ? WHERE id = ?', (mevcut - dusulecek, fatura['id']))
-            conn.execute('''
-                INSERT INTO hareketler (fatura_id, urun_id, tedarikci_id, adet, sevk_no, depo, teslim_alan, tarih)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (fatura['id'], data['urun_id'], data['tedarikci_id'], dusulecek, 
-                  data['sevk_no'], data['depo'], data['teslim_alan'], data['tarih']))
+            conn.execute('INSERT INTO hareketler (fatura_id, urun_id, tedarikci_id, adet, sevk_no, depo, teslim_alan, tarih) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
+                         (fatura['id'], data['urun_id'], data['tedarikci_id'], dusulecek, data['sevk_no'], data['depo'], data['teslim_alan'], data['tarih']))
             kalan_istenen -= dusulecek
-            
         conn.commit()
         conn.close()
         return True, "İşlem Başarılı"
 
-    # --- TOPLU ÇIKIŞ ---
     @staticmethod
     def get_pending_invoices_grouped():
         conn = DatabaseManager.get_db_connection()
-        rows = conn.execute('''
-            SELECT DISTINCT t.id as tedarikci_id, t.ad as tedarikci_ad, f.fatura_no, f.tarih
-            FROM faturalar f
-            JOIN tedarikciler t ON f.tedarikci_id = t.id
-            WHERE f.kalan_adet > 0
-            ORDER BY f.tarih ASC
-        ''').fetchall()
+        rows = conn.execute('SELECT DISTINCT t.id as tedarikci_id, t.ad as tedarikci_ad, f.fatura_no, f.tarih FROM faturalar f JOIN tedarikciler t ON f.tedarikci_id = t.id WHERE f.kalan_adet > 0 ORDER BY f.tarih ASC').fetchall()
         conn.close()
         return rows
 
     @staticmethod
     def get_invoice_products(tedarikci_id, fatura_no):
         conn = DatabaseManager.get_db_connection()
-        rows = conn.execute('''
-            SELECT f.id as fatura_id, u.ad as urun_ad, u.barkod, f.kalan_adet, f.net_maliyet
-            FROM faturalar f
-            JOIN urunler u ON f.urun_id = u.id
-            WHERE f.tedarikci_id = ? AND f.fatura_no = ? AND f.kalan_adet > 0
-        ''', (tedarikci_id, fatura_no)).fetchall()
+        rows = conn.execute('SELECT f.id as fatura_id, u.ad as urun_ad, u.barkod, f.kalan_adet, f.net_maliyet FROM faturalar f JOIN urunler u ON f.urun_id = u.id WHERE f.tedarikci_id = ? AND f.fatura_no = ? AND f.kalan_adet > 0', (tedarikci_id, fatura_no)).fetchall()
         result = [dict(row) for row in rows]
         conn.close()
         return result
@@ -276,36 +286,22 @@ class DatabaseManager:
         conn = DatabaseManager.get_db_connection()
         fatura_ids = data.getlist('fatura_id[]')
         cekilecek_adetler = data.getlist('adet[]')
-        sevk_no = data.get('sevk_no')
-        depo = data.get('depo')
-        teslim_alan = data.get('teslim_alan')
-        islem_tarihi = data.get('tarih')
-        
         kayit_sayisi = 0
         for i in range(len(fatura_ids)):
             fid = fatura_ids[i]
             adet_str = cekilecek_adetler[i]
-            if not adet_str: continue
+            if not adet_str or int(adet_str) <= 0: continue
             adet = int(adet_str)
-            if adet <= 0: continue
-            
             fatura = conn.execute("SELECT * FROM faturalar WHERE id = ?", (fid,)).fetchone()
             if not fatura or adet > fatura['kalan_adet']: continue
-            
-            yeni_kalan = fatura['kalan_adet'] - adet
-            conn.execute("UPDATE faturalar SET kalan_adet = ? WHERE id = ?", (yeni_kalan, fid))
-            conn.execute('''
-                INSERT INTO hareketler (fatura_id, urun_id, tedarikci_id, adet, sevk_no, depo, teslim_alan, tarih)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (fid, fatura['urun_id'], fatura['tedarikci_id'], adet, sevk_no, depo, teslim_alan, islem_tarihi))
+            conn.execute("UPDATE faturalar SET kalan_adet = ? WHERE id = ?", (fatura['kalan_adet'] - adet, fid))
+            conn.execute('INSERT INTO hareketler (fatura_id, urun_id, tedarikci_id, adet, sevk_no, depo, teslim_alan, tarih) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
+                         (fid, fatura['urun_id'], fatura['tedarikci_id'], adet, data['sevk_no'], data['depo'], data['teslim_alan'], data['tarih']))
             kayit_sayisi += 1
-            
         conn.commit()
         conn.close()
-        if kayit_sayisi == 0: return False, "İşlem yapılmadı."
-        return True, f"{kayit_sayisi} kalem ürün başarıyla sevkedildi."
+        return True, f"{kayit_sayisi} kalem ürün başarıyla sevkedildi." if kayit_sayisi > 0 else (False, "İşlem yapılmadı.")
 
-    # --- HAREKET YÖNETİMİ ---
     @staticmethod
     def delete_movement(hareket_id):
         conn = DatabaseManager.get_db_connection()
@@ -313,56 +309,35 @@ class DatabaseManager:
         if not hareket:
             conn.close()
             return False, "Hareket bulunamadı."
-        fatura_id = hareket['fatura_id']
-        adet = hareket['adet']
-        fatura = conn.execute("SELECT * FROM faturalar WHERE id = ?", (fatura_id,)).fetchone()
+        fatura = conn.execute("SELECT * FROM faturalar WHERE id = ?", (hareket['fatura_id'],)).fetchone()
         if not fatura:
             conn.close()
-            return False, "Fatura silinmiş, işlem geri alınamaz."
-            
-        yeni_kalan = fatura['kalan_adet'] + adet
-        conn.execute("UPDATE faturalar SET kalan_adet = ? WHERE id = ?", (yeni_kalan, fatura_id))
+            return False, "Fatura silinmiş."
+        conn.execute("UPDATE faturalar SET kalan_adet = ? WHERE id = ?", (fatura['kalan_adet'] + hareket['adet'], hareket['fatura_id']))
         conn.execute("DELETE FROM hareketler WHERE id = ?", (hareket_id,))
         conn.commit()
         conn.close()
-        return True, "İşlem geri alındı, stok iade edildi."
+        return True, "İşlem geri alındı."
 
     @staticmethod
     def get_grouped_movements(filtre_tedarikci=None, filtre_urun=None):
         conn = DatabaseManager.get_db_connection()
-        base_sql = '''
-            SELECT h.sevk_no, h.tarih, h.depo, h.teslim_alan, t.ad as tedarikci,
-                COUNT(h.id) as kalem_sayisi, SUM(h.adet) as toplam_adet
-            FROM hareketler h
-            JOIN tedarikciler t ON h.tedarikci_id = t.id
-            WHERE 1=1
-        '''
+        sql = 'SELECT h.sevk_no, h.tarih, h.depo, h.teslim_alan, t.ad as tedarikci, COUNT(h.id) as kalem_sayisi, SUM(h.adet) as toplam_adet FROM hareketler h JOIN tedarikciler t ON h.tedarikci_id = t.id WHERE 1=1'
         params = []
-        if filtre_tedarikci:
-            base_sql += " AND h.tedarikci_id = ?"
-            params.append(filtre_tedarikci)
-        if filtre_urun:
-            base_sql += " AND h.urun_id = ?"
-            params.append(filtre_urun)
-            
-        base_sql += " GROUP BY h.sevk_no, h.tarih ORDER BY h.id DESC"
-        rows = conn.execute(base_sql, params).fetchall()
+        if filtre_tedarikci: sql += " AND h.tedarikci_id = ?"; params.append(filtre_tedarikci)
+        if filtre_urun: sql += " AND h.urun_id = ?"; params.append(filtre_urun)
+        sql += " GROUP BY h.sevk_no, h.tarih ORDER BY h.id DESC"
+        rows = conn.execute(sql, params).fetchall()
         conn.close()
         return rows
 
     @staticmethod
     def get_movement_details_by_sevk(sevk_no):
         conn = DatabaseManager.get_db_connection()
-        rows = conn.execute('''
-            SELECT h.id, u.ad as urun_ad, h.adet, h.depo, h.teslim_alan
-            FROM hareketler h
-            JOIN urunler u ON h.urun_id = u.id
-            WHERE h.sevk_no = ?
-        ''', (sevk_no,)).fetchall()
+        rows = conn.execute('SELECT h.id, u.ad as urun_ad, h.adet, h.depo, h.teslim_alan FROM hareketler h JOIN urunler u ON h.urun_id = u.id WHERE h.sevk_no = ?', (sevk_no,)).fetchall()
         conn.close()
         return [dict(row) for row in rows]
 
-    # --- DÜZENLEME VE SİLME ---
     @staticmethod
     def get_fatura(fatura_id):
         conn = DatabaseManager.get_db_connection()
@@ -388,30 +363,26 @@ class DatabaseManager:
         fatura = conn.execute("SELECT toplam_adet, kalan_adet FROM faturalar WHERE id = ?", (fatura_id,)).fetchone()
         mal_cekilmis = fatura['toplam_adet'] != fatura['kalan_adet']
         yeni_adet = int(data['adet'])
-        if yeni_adet < 1: 
+        if yeni_adet < 1:
             conn.close()
             return False, "Adet en az 1 olmalı."
         if mal_cekilmis and yeni_adet != fatura['toplam_adet']:
             conn.close()
             return False, "Mal çıkışı yapılmış, adet değiştirilemez!"
-
+        
         yeni_kalan = fatura['kalan_adet'] if mal_cekilmis else yeni_adet
         fiyat = float(data['fiyat'])
         iskonto = float(data['iskonto'])
         kdv = float(data['kdv'])
         iskontolu_fiyat = fiyat - (fiyat * iskonto / 100)
         net_maliyet = iskontolu_fiyat * (1 + kdv / 100)
-
-        conn.execute('''
-            UPDATE faturalar 
-            SET fatura_no=?, tarih=?, toplam_adet=?, kalan_adet=?, net_maliyet=?
-            WHERE id=?
-        ''', (data['fatura_no'], data['tarih'], yeni_adet, yeni_kalan, net_maliyet, fatura_id))
+        
+        conn.execute('UPDATE faturalar SET fatura_no=?, tarih=?, toplam_adet=?, kalan_adet=?, net_maliyet=? WHERE id=?', 
+                     (data['fatura_no'], data['tarih'], yeni_adet, yeni_kalan, net_maliyet, fatura_id))
         conn.commit()
         conn.close()
         return True, "Fatura güncellendi."
 
-    # --- TANIM YÖNETİMİ ---
     @staticmethod
     def get_tedarikci(id):
         conn = DatabaseManager.get_db_connection()
