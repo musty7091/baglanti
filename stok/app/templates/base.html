@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tedarikçi Bağlantı Takip Pro</title>
+    <title>Bağlantı Takip Sistemi</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
     
@@ -29,54 +32,104 @@
     <style>
         body { background-color: #f8f9fa; }
         .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; margin-bottom: 20px; }
-        .navbar { background-color: #2c3e50; }
+        /* Navbar Rengi */
+        .navbar { background-color: #2c3e50; } 
         .navbar-brand { color: white !important; font-weight: bold; }
-        .nav-link { color: rgba(255,255,255,0.8) !important; }
-        .nav-link:hover { color: white !important; }
+        .nav-link { color: rgba(255,255,255,0.8) !important; font-size: 0.95rem; transition: all 0.2s;}
+        .nav-link:hover { color: white !important; transform: translateY(-1px); }
+        .nav-link i { width: 20px; text-align: center; } /* İkonları hizalar */
+        
         /* Select2 Düzeltmeleri */
         .select2-container--bootstrap-5 .select2-selection { border-color: #dee2e6; }
         
         @media print {
-            .btn, .navbar, .no-print { display: none !important; }
+            .btn, .navbar, .no-print, .dataTables_filter, .dataTables_length, .dataTables_info, .dataTables_paginate { display: none !important; }
         }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="/">🍷 Bağlantı Takip</a>
+        <div class="container-fluid"> <a class="navbar-brand" href="/"><i class="fas fa-wine-glass-alt me-2"></i>Bağlantı Takip</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 {% if current_user.is_authenticated %}
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.excel_yukle') }}">Excel Yükle</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Özet</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.tanimlar') }}">Tanımlar</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.faturalar') }}">Faturalar</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.baglanti_yap') }}">Bağlantı (Giriş)</a></li>
+                <ul class="navbar-nav ms-auto align-items-center">
+                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.index') }}">
+                            <i class="fas fa-home me-1"></i> Özet
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.tanimlar') }}">
+                            <i class="fas fa-boxes me-1"></i> Tanımlar
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.faturalar') }}">
+                            <i class="fas fa-file-invoice-dollar me-1"></i> Faturalar
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.arsiv') }}">
+                            <i class="fas fa-archive me-1"></i> Arşiv
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link fw-bold text-white" href="{{ url_for('main.baglanti_yap') }}">
+                            <i class="fas fa-plus-circle me-1 text-success"></i> Yeni Bağlantı
+                        </a>
+                    </li>
+                    
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Sevkiyat</a>
-                        <ul class="dropdown-menu">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-truck-loading me-1"></i> Sevkiyat
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="{{ url_for('main.mal_cek') }}">Tekli Çıkış (FIFO)</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('main.toplu_cikis') }}">Toplu Çıkış (Fatura Bazlı)</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('main.hareketler') }}">Hareket Geçmişi</a></li>
                         </ul>
                     </li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.rapor') }}">Rapor</a></li>
-                    <li class="nav-item ms-3"><a class="nav-link text-warning" href="{{ url_for('main.logout') }}">Çıkış Yap</a></li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.rapor') }}">
+                            <i class="fas fa-chart-pie me-1"></i> Durum
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.excel_yukle') }}">
+                            <i class="fas fa-file-excel me-1"></i> Excellden Yükle
+                        </a>
+                    </li>
+                    
+                    <li class="nav-item ms-lg-2">
+                        <a class="btn btn-outline-danger btn-sm text-light border-0" href="{{ url_for('main.logout') }}">
+                            <i class="fas fa-sign-out-alt me-1"></i> Çıkış Yap
+                        </a>
+                    </li>
                 </ul>
                 {% endif %}
             </div>
         </div>
     </nav>
+
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
-              <div class="alert alert-{{ category }}">{{ message }}</div>
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                  {{ message }}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
             {% endfor %}
           {% endif %}
         {% endwith %}
@@ -85,6 +138,7 @@
 
     <script>
         $(document).ready(function() {
+            // Select2 Global Ayarları
             $('.select2').select2({
                 theme: 'bootstrap-5',
                 width: '100%',

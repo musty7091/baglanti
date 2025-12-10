@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">🗄️ Fatura Arşivi (Tamamlananlar)</h4>
+        <small>Bu listede stoğu tamamen tükenmiş faturalar yer alır.</small>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table id="archiveTable" class="table table-hover table-striped w-100">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Fatura No</th>
+                        <th>Tedarikçi</th>
+                        <th class="text-center">Kalem</th>
+                        <th class="text-center">Toplam Adet</th>
+                        <th class="text-end">Fatura Tutarı</th>
+                        <th class="text-end">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in faturalar %}
+                    <tr>
+                        <td>{{ f['tarih'] }}</td>
+                        <td class="fw-bold">{{ f['fatura_no'] }}</td>
+                        <td>{{ f['tedarikci_ad'] }}</td>
+                        <td class="text-center">{{ f['kalem_sayisi'] }}</td>
+                        <td class="text-center">{{ f['genel_toplam_adet'] }}</td>
+                        <td class="text-end fw-bold">{{ f['fatura_toplam_tutar'] | money }} TL</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary" 
+                                    onclick="showDetails('{{ f['tedarikci_id'] }}', '{{ f['fatura_no'] }}', '{{ f['tedarikci_ad'] }}')">
+                                Detay
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="modalTitle">Arşiv Detayı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+                <table class="table table-sm table-bordered" id="modalTable" style="display:none;">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Barkod</th>
+                            <th>Ürün Adı</th>
+                            <th>Birim Maliyet</th>
+                            <th>İlk Adet</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('#archiveTable').DataTable({
+            "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json" },
+            "pageLength": 25,
+            "order": [[ 0, "desc" ]], // Tarihe göre yeni en üstte
+            "dom": '<"d-flex justify-content-between mb-3"Bf>rtip',
+            "buttons": [
+                { extend: 'excelHtml5', text: '📊 Excel İndir', className: 'btn btn-success btn-sm' },
+                { extend: 'print', text: '🖨️ Yazdır', className: 'btn btn-secondary btn-sm' }
+            ]
+        });
+    });
+
+    function showDetails(tedarikci_id, fatura_no, tedarikci_ad) {
+        const modal = new bootstrap.Modal(document.getElementById('detailModal'));
+        document.getElementById('modalTitle').innerText = `${tedarikci_ad} - Fatura: ${fatura_no} (Arşiv)`;
+        
+        document.getElementById('modalLoading').style.display = 'block';
+        document.getElementById('modalTable').style.display = 'none';
+        const tbody = document.getElementById('modalBody');
+        tbody.innerHTML = '';
+        
+        modal.show();
+
+        // Arşivdeki ürünlerin detayını çekmek için mevcut API'yi kullanabiliriz.
+        // Ancak o API "kalan > 0" olanları getiriyordu. 
+        // Bu yüzden küçük bir hile ile tümünü getirmesini sağlayacağız ya da API'yi güncellememiz gerekecek.
+        // Hızlı çözüm: Models.py'deki get_invoice_products fonksiyonundaki "AND f.kalan_adet > 0" şartı
+        // arşiv görüntülemeyi engeller.
+        
+        // ÇÖZÜM: API yerine buraya özel yeni bir fetch yazmak yerine
+        // models.py'deki get_invoice_products fonksiyonundan "kalan_adet > 0" şartını kaldırmak en doğrusudur.
+        // Çünkü detay bakarken biten ürünleri de görmek isteriz.
+        
+        fetch('/api/fatura-detay', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ tedarikci_id: tedarikci_id, fatura_no: fatura_no })
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('modalLoading').style.display = 'none';
+            document.getElementById('modalTable').style.display = 'table';
+            
+            data.forEach(item => {
+                let maliyet = parseFloat(item.net_maliyet).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                
+                const row = `
+                    <tr>
+                        <td><small>${item.barkod}</small></td>
+                        <td>${item.urun_ad}</td>
+                        <td class="text-end">${maliyet} TL</td>
+                        <td class="text-center">${item.kalan_adet}</td> 
+                        <td class="text-center"><span class="badge bg-success">Tamamlandı</span></td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        });
+    }
+</script>
+{% endblock %}

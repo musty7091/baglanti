@@ -49,10 +49,10 @@ def logout():
 def index():
     toplam_adet, toplam_tutar, toplam_cesit, ozet = DatabaseManager.get_dashboard_stats()
     return render_template('dashboard.html', 
-                         toplam_adet=toplam_adet, 
-                         toplam_tutar=toplam_tutar, 
-                         toplam_cesit=toplam_cesit,
-                         ozet=ozet)
+                           toplam_adet=toplam_adet, 
+                           toplam_tutar=toplam_tutar, 
+                           toplam_cesit=toplam_cesit,
+                           ozet=ozet)
 
 # --- YEDEKLEME ---
 @main.route('/yedek-al')
@@ -322,7 +322,12 @@ def hareketler():
     tedarikciler = conn.execute("SELECT * FROM tedarikciler ORDER BY ad").fetchall()
     urunler = conn.execute("SELECT * FROM urunler ORDER BY ad").fetchall()
     conn.close()
-    return render_template('hareketler.html', hareketler=hareket_listesi, tedarikciler=tedarikciler, urunler=urunler, secili_tedarikci=filtre_tedarikci, secili_urun=filtre_urun)
+    return render_template('hareketler.html', 
+                           hareketler=hareket_listesi, 
+                           tedarikciler=tedarikciler, 
+                           urunler=urunler, 
+                           secili_tedarikci=filtre_tedarikci, 
+                           secili_urun=filtre_urun)
 
 @main.route('/hareket-sil/<int:id>')
 @login_required
@@ -375,7 +380,16 @@ def rapor():
     gecmis_data = conn.execute(sql_gecmis, params_gecmis).fetchall()
     conn.close()
     
-    return render_template('rapor.html', aktif_baglantilar=aktif_data, gecmis_baglantilar=gecmis_data, genel_toplam=genel_toplam, toplam_alinan=toplam_alinan, toplam_kalan=toplam_kalan, tedarikciler=tedarikciler, urunler=urunler, secili_tedarikci=filtre_tedarikci, secili_urun=filtre_urun)
+    return render_template('rapor.html', 
+                           aktif_baglantilar=aktif_data, 
+                           gecmis_baglantilar=gecmis_data, 
+                           genel_toplam=genel_toplam, 
+                           toplam_alinan=toplam_alinan, 
+                           toplam_kalan=toplam_kalan, 
+                           tedarikciler=tedarikciler, 
+                           urunler=urunler, 
+                           secili_tedarikci=filtre_tedarikci, 
+                           secili_urun=filtre_urun)
 
 @main.route('/fatura-sil/<int:id>')
 @login_required
@@ -404,7 +418,12 @@ def faturalar():
     conn = DatabaseManager.get_db_connection()
     tedarikciler = conn.execute("SELECT * FROM tedarikciler ORDER BY ad").fetchall()
     conn.close()
-    return render_template('faturalar.html', faturalar=grouped_invoices, tedarikciler=tedarikciler, secili_tedarikci=tedarikci_id, tarih_bas=tarih_bas, tarih_bit=tarih_bit)
+    return render_template('faturalar.html', 
+                           faturalar=grouped_invoices, 
+                           tedarikciler=tedarikciler, 
+                           secili_tedarikci=tedarikci_id, 
+                           tarih_bas=tarih_bas, 
+                           tarih_bit=tarih_bit)
 
 @main.route('/fatura-sil-komple', methods=['POST'])
 @login_required
@@ -414,3 +433,9 @@ def fatura_sil_komple():
     success, msg = DatabaseManager.delete_invoice_whole(tedarikci_id, fatura_no)
     flash(msg, 'success' if success else 'danger')
     return redirect(url_for('main.faturalar'))
+
+@main.route('/arsiv')
+@login_required
+def arsiv():
+    faturalar = DatabaseManager.get_archived_invoices()
+    return render_template('arsiv.html', faturalar=faturalar)
