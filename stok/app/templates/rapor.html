@@ -32,20 +32,20 @@
 <div class="card mb-4">
     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
         <h4 class="mb-0">Aktif (Bekleyen) Bakiyeler</h4>
-        <button class="btn btn-sm btn-light no-print" onclick="window.print()">Yazdır / PDF</button>
     </div>
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-bordered table-striped">
+            <table id="activeTable" class="table table-bordered table-striped w-100">
                 <thead class="table-dark">
                     <tr>
                         <th>Tedarikçi</th>
                         <th>Ürün</th>
-                        <th>Fatura No / Tarih</th>
-                        <th>Toplam Alınan</th>
-                        <th>Birim Maliyet (Net)</th>
-                        <th>Kalan (Alacak)</th>
-                        <th>Bakiye Değeri</th>
+                        <th>Fatura No</th>
+                        <th>Tarih</th> 
+                        <th class="text-center">Alınan</th>
+                        <th class="text-end">Birim Maliyet</th>
+                        <th class="text-center">Kalan</th>
+                        <th class="text-end">Bakiye Değeri</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -53,23 +53,21 @@
                     <tr>
                         <td>{{ row['tedarikci'] }}</td>
                         <td>{{ row['urun'] }}</td>
-                        <td>
-                            <div>{{ row['fatura_no'] }}</div>
-                            <small class="text-muted">{{ row['tarih'] }}</small>
-                        </td>
+                        <td>{{ row['fatura_no'] }}</td>
+                        <td>{{ row['tarih'] }}</td>
                         <td class="text-center">{{ row['toplam_adet'] }}</td>
                         <td class="text-end">{{ row['net_maliyet'] | money }} TL</td>
                         <td class="text-center fw-bold text-danger">{{ row['kalan'] }}</td>
                         <td class="text-end fw-bold">{{ (row['net_maliyet'] * row['kalan']) | money }} TL</td>
                     </tr>
-                    {% else %}
-                    <tr><td colspan="7" class="text-center">Filtre kriterlerine uygun aktif bakiye bulunamadı.</td></tr>
                     {% endfor %}
                 </tbody>
-                <tfoot class="table-secondary">
+                <tfoot class="table-secondary fw-bold">
                     <tr>
-                        <th colspan="6" class="text-end">GENEL TOPLAM DEĞER:</th>
-                        <th class="text-end">{{ genel_toplam | money }} TL</th>
+                        <td colspan="4" class="text-end text-uppercase">Genel Toplamlar:</td>
+                        <td class="text-center">{{ toplam_alinan }}</td>
+                        <td></td> <td class="text-center text-danger">{{ toplam_kalan }}</td>
+                        <td class="text-end">{{ genel_toplam | money }} TL</td>
                     </tr>
                 </tfoot>
             </table>
@@ -83,7 +81,7 @@
     </div>
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-bordered table-sm text-muted">
+            <table class="table table-bordered table-sm text-muted w-100">
                 <thead class="table-light">
                     <tr>
                         <th>Tedarikçi</th>
@@ -115,43 +113,123 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header">Son Sevk Hareketleri (Log) - <small>Hatalı işlemleri buradan silebilirsiniz.</small></div>
-    <div class="card-body">
-         <table class="table table-sm table-hover">
-            <thead>
-                <tr>
-                    <th>Tarih</th>
-                    <th>Tedarikçi</th>
-                    <th>Ürün</th>
-                    <th>Çekilen Adet</th>
-                    <th>Sevk No</th>
-                    <th>Depo</th>
-                    <th>Teslim Alan</th>
-                    <th class="text-end">İşlem</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in hareketler %}
-                <tr>
-                    <td>{{ log['tarih'] }}</td>
-                    <td>{{ log['tedarikci'] }}</td>
-                    <td>{{ log['urun'] }}</td>
-                    <td class="text-danger fw-bold">-{{ log['adet'] }}</td>
-                    <td>{{ log['sevk_no'] }}</td>
-                    <td>{{ log['depo'] }}</td>
-                    <td>{{ log['alan'] }}</td>
-                    <td class="text-end">
-                        <a href="{{ url_for('main.hareket_sil', id=log['id']) }}" 
-                           class="btn btn-sm btn-outline-danger"
-                           onclick="return confirm('BU HAREKETİ SİLİP STOKU İADE ETMEK İSTEDİĞİNİZE EMİN MİSİNİZ?');">
-                           Sil / Geri Al
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-         </table>
-    </div>
-</div>
+<script>
+    $(document).ready(function() {
+        var simdi = new Date();
+        var tarihString = simdi.toLocaleDateString('tr-TR') + "_" + simdi.toLocaleTimeString('tr-TR');
+        var baslik = 'Stok Bakiyesi Raporu';
+
+        // Dışa aktarma ayarları (Footer dahil)
+        var exportAyarlari = {
+            columns: ':visible',
+            stripHtml: true,
+            footer: true 
+        };
+
+        $('#activeTable').DataTable({
+            "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json" },
+            "pageLength": 25,
+            "lengthMenu": [10, 25, 50, 100, "Tümü"],
+            "dom": '<"d-flex justify-content-between mb-3"Bf>rtip',
+            "buttons": [
+                {
+                    extend: 'print',
+                    text: '🖨️ Yazdır',
+                    className: 'btn btn-secondary btn-sm',
+                    title: baslik,
+                    exportOptions: exportAyarlari,
+                    customize: function (win) {
+                        // 1. Yazdırma Modunu YATAY (Landscape) Yap
+                        var css = '@page { size: landscape; }',
+                            head = win.document.head || win.document.getElementsByTagName('head')[0],
+                            style = win.document.createElement('style');
+                        style.type = 'text/css';
+                        style.media = 'print';
+                        if (style.styleSheet){ style.styleSheet.cssText = css; } 
+                        else { style.appendChild(win.document.createTextNode(css)); }
+                        head.appendChild(style);
+
+                        // 2. Genel Sayfa Stili
+                        $(win.document.body).css('font-size', '9pt').css('padding', '10px');
+                        
+                        // 3. Başlık Ortala
+                        $(win.document.body).find('h1')
+                            .css('text-align', 'center')
+                            .css('font-size', '16pt')
+                            .css('margin-bottom', '15px');
+                        
+                        // 4. Tablo Stili
+                        $(win.document.body).find('table')
+                            .addClass('compact')
+                            .css('width', '100%');
+                        
+                        // 5. Başlıkları Koyu Yap
+                        $(win.document.body).find('th')
+                            .css('background-color', '#2c3e50')
+                            .css('color', 'white');
+
+                        // 6. ALT TOPLAMLARI GÖSTER (Kritik Ayar)
+                        $(win.document.body).find('tfoot').css('display', 'table-footer-group');
+                        $(win.document.body).find('tfoot td')
+                            .css('font-weight', 'bold')
+                            .css('border-top', '2px solid black')
+                            .css('background-color', '#f0f0f0');
+                    }
+                },
+                {
+                    extend: 'excelHtml5',
+                    text: '📊 Excel',
+                    className: 'btn btn-success btn-sm',
+                    title: baslik + ' - ' + tarihString,
+                    exportOptions: exportAyarlari,
+                    autoFilter: true,
+                    sheetName: 'Stok Durumu',
+                    footer: true 
+                },
+                {
+                    extend: 'pdfHtml5',
+                    text: '📄 PDF',
+                    className: 'btn btn-danger btn-sm',
+                    title: baslik,
+                    orientation: 'landscape',
+                    pageSize: 'A4',
+                    exportOptions: exportAyarlari,
+                    footer: true,
+                    customize: function (doc) {
+                        doc.defaultStyle.alignment = 'center';
+                        doc.styles.tableHeader.alignment = 'center';
+                        
+                        // Sütun Genişlikleri (8 Sütun)
+                        doc.content[1].table.widths = [
+                            'auto', '*', 'auto', 'auto', 
+                            'auto', 'auto', 'auto', 'auto'
+                        ];
+                        
+                        // Başlık Stili
+                        doc.styles.tableHeader.fillColor = '#2c3e50';
+                        doc.styles.tableHeader.color = 'white';
+                        doc.styles.tableHeader.fontSize = 9;
+                        doc.defaultStyle.fontSize = 8;
+                        
+                        // Footer Stili
+                        doc.styles.tableFooter = {
+                            bold: true,
+                            fontSize: 9,
+                            fillColor: '#f2f2f2',
+                            alignment: 'center'
+                        };
+
+                        // Kenarlıklar
+                        var objLayout = {};
+                        objLayout['hLineWidth'] = function(i) { return .5; };
+                        objLayout['vLineWidth'] = function(i) { return .5; };
+                        objLayout['hLineColor'] = function(i) { return '#aaa'; };
+                        objLayout['vLineColor'] = function(i) { return '#aaa'; };
+                        doc.content[1].layout = objLayout;
+                    }
+                }
+            ]
+        });
+    });
+</script>
 {% endblock %}

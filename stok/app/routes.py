@@ -54,7 +54,16 @@ def tanimlar():
 @login_required
 def tedarikci_ekle():
     conn = DatabaseManager.get_db_connection()
-    conn.execute("INSERT INTO tedarikciler (ad) VALUES (?)", (request.form['ad'],))
+    ad = request.form['ad'].strip() # Boşluk temizliği
+    
+    # Aynı isimde tedarikçi kontrolü
+    existing = conn.execute("SELECT * FROM tedarikciler WHERE ad = ?", (ad,)).fetchone()
+    if existing:
+        conn.close()
+        flash('Bu isimde bir tedarikçi zaten var!', 'danger')
+        return redirect(url_for('main.tanimlar'))
+        
+    conn.execute("INSERT INTO tedarikciler (ad) VALUES (?)", (ad,))
     conn.commit()
     conn.close()
     flash('Tedarikçi eklendi.', 'success')
@@ -64,7 +73,8 @@ def tedarikci_ekle():
 @login_required
 def tedarikci_duzenle(id):
     if request.method == 'POST':
-        DatabaseManager.update_tedarikci(id, request.form['ad'])
+        ad = request.form['ad'].strip()
+        DatabaseManager.update_tedarikci(id, ad)
         flash('Tedarikçi güncellendi.', 'success')
         return redirect(url_for('main.tanimlar'))
     t = DatabaseManager.get_tedarikci(id)
@@ -80,20 +90,48 @@ def tedarikci_sil(id):
 @main.route('/urun-ekle', methods=['POST'])
 @login_required
 def urun_ekle():
+    barkod = request.form['barkod'].strip() # Boşluk temizliği
+    ad = request.form['ad'].strip()
+    
     conn = DatabaseManager.get_db_connection()
-    conn.execute("INSERT INTO urunler (barkod, ad) VALUES (?, ?)", (request.form['barkod'], request.form['ad']))
+    
+    # Barkod Mükerrerlik Kontrolü
+    mevcut_urun = conn.execute("SELECT * FROM urunler WHERE barkod = ?", (barkod,)).fetchone()
+    
+    if mevcut_urun:
+        conn.close()
+        flash(f"HATA: Bu barkod ({barkod}) zaten '{mevcut_urun['ad']}' ismiyle kayıtlı! Aynı barkodla ikinci ürün eklenemez.", 'danger')
+        return redirect(url_for('main.tanimlar'))
+
+    conn.execute("INSERT INTO urunler (barkod, ad) VALUES (?, ?)", (barkod, ad))
     conn.commit()
     conn.close()
-    flash('Ürün eklendi.', 'success')
+    flash('Ürün başarıyla eklendi.', 'success')
     return redirect(url_for('main.tanimlar'))
 
 @main.route('/urun-duzenle/<int:id>', methods=['GET', 'POST'])
 @login_required
 def urun_duzenle(id):
     if request.method == 'POST':
-        DatabaseManager.update_urun(id, request.form['barkod'], request.form['ad'])
+        yeni_barkod = request.form['barkod'].strip()
+        yeni_ad = request.form['ad'].strip()
+        
+        conn = DatabaseManager.get_db_connection()
+        
+        # Düzenleme sırasında barkod çakışma kontrolü
+        kontrol = conn.execute("SELECT * FROM urunler WHERE barkod = ? AND id != ?", (yeni_barkod, id)).fetchone()
+        
+        if kontrol:
+            conn.close()
+            flash(f"HATA: Bu barkod ({yeni_barkod}) zaten '{kontrol['ad']}' ürününe ait. Değişiklik yapılamadı.", 'danger')
+            return redirect(url_for('main.urun_duzenle', id=id))
+        
+        conn.close()
+
+        DatabaseManager.update_urun(id, yeni_barkod, yeni_ad)
         flash('Ürün güncellendi.', 'success')
         return redirect(url_for('main.tanimlar'))
+        
     u = DatabaseManager.get_urun(id)
     return render_template('tanim_duzenle.html', type='urun', data=u)
 
@@ -118,8 +156,23 @@ def baglanti_yap():
 @login_required
 def baglanti_kaydet():
     tedarikci_id = request.form.get('tedarikci_id')
-    fatura_no = request.form.get('fatura_no')
+    # strip() ile baştaki ve sondaki boşlukları temizliyoruz
+    fatura_no = request.form.get('fatura_no').strip()
     tarih = request.form.get('tarih')
+    
+    # --- YENİ EKLENEN KONTROL: MÜKERRER FATURA ---
+    conn = DatabaseManager.get_db_connection()
+    mevcut_fatura = conn.execute(
+        "SELECT id FROM faturalar WHERE tedarikci_id = ? AND fatura_no = ?", 
+        (tedarikci_id, fatura_no)
+    ).fetchone()
+    conn.close()
+
+    if mevcut_fatura:
+        flash(f"HATA: {fatura_no} numaralı fatura bu tedarikçi için zaten daha önce kaydedilmiş! Mükerrer kayıt yapılamaz.", "danger")
+        # Kullanıcıyı forma geri gönderiyoruz
+        return redirect(url_for('main.baglanti_yap'))
+    # ---------------------------------------------
     
     urun_ids = request.form.getlist('urun_id[]')
     adetler = request.form.getlist('adet[]')
@@ -145,7 +198,6 @@ def baglanti_kaydet():
             'iskonto': iskontolar[i] or 0,
             'kdv': kdvler[i] or 20
         }
-        # Negatif kontrolü model içinde yapılıyor
         DatabaseManager.add_baglanti(data)
         kayit_sayisi += 1
         
@@ -198,7 +250,7 @@ def toplu_cikis_kaydet():
 def hareket_sil(id):
     success, msg = DatabaseManager.delete_movement(id)
     flash(msg, 'success' if success else 'danger')
-    return redirect(url_for('main.rapor'))
+    return redirect(url_for('main.hareketler'))
 
 # --- RAPOR & DÜZENLEME ---
 @main.route('/rapor')
@@ -233,7 +285,12 @@ def rapor():
     sql_aktif, params_aktif = build_query(base_aktif)
     sql_aktif += " ORDER BY t.ad, u.ad, f.tarih"
     aktif_data = conn.execute(sql_aktif, params_aktif).fetchall()
+    
+    # --- TOPLAM HESAPLAMALARI ---
     genel_toplam = sum(r['net_maliyet'] * r['kalan'] for r in aktif_data)
+    toplam_alinan = sum(r['toplam_adet'] for r in aktif_data) # YENİ
+    toplam_kalan = sum(r['kalan'] for r in aktif_data)        # YENİ
+    # ----------------------------
 
     base_gecmis = '''
         SELECT f.id, t.ad as tedarikci, u.ad as urun, f.tarih, f.fatura_no, f.net_maliyet, f.toplam_adet, f.kalan_adet as kalan
@@ -245,29 +302,45 @@ def rapor():
     sql_gecmis, params_gecmis = build_query(base_gecmis)
     sql_gecmis += " ORDER BY f.tarih DESC"
     gecmis_data = conn.execute(sql_gecmis, params_gecmis).fetchall()
-    
-    base_hareket = '''
-        SELECT h.id, h.tarih, t.ad as tedarikci, u.ad as urun, h.adet, h.sevk_no, h.depo, h.teslim_alan as alan
-        FROM hareketler h
-        JOIN tedarikciler t ON h.tedarikci_id = t.id
-        JOIN urunler u ON h.urun_id = u.id
-        WHERE 1=1
-    '''
-    sql_hareket, params_hareket = build_query(base_hareket, table_alias='h')
-    sql_hareket += " ORDER BY h.id DESC LIMIT 50"
-
-    hareketler = conn.execute(sql_hareket, params_hareket).fetchall()
     conn.close()
     
     return render_template('rapor.html', 
                          aktif_baglantilar=aktif_data, 
                          gecmis_baglantilar=gecmis_data,
-                         genel_toplam=genel_toplam, 
-                         hareketler=hareketler,
+                         genel_toplam=genel_toplam,
+                         toplam_alinan=toplam_alinan, # YENİ
+                         toplam_kalan=toplam_kalan,   # YENİ
                          tedarikciler=tedarikciler,
                          urunler=urunler,
                          secili_tedarikci=filtre_tedarikci,
                          secili_urun=filtre_urun)
+
+@main.route('/hareketler')
+@login_required
+def hareketler():
+    filtre_tedarikci = request.args.get('tedarikci')
+    filtre_urun = request.args.get('urun')
+    hareket_listesi = DatabaseManager.get_grouped_movements(filtre_tedarikci, filtre_urun)
+    
+    conn = DatabaseManager.get_db_connection()
+    tedarikciler = conn.execute("SELECT * FROM tedarikciler ORDER BY ad").fetchall()
+    urunler = conn.execute("SELECT * FROM urunler ORDER BY ad").fetchall()
+    conn.close()
+    
+    return render_template('hareketler.html', 
+                           hareketler=hareket_listesi,
+                           tedarikciler=tedarikciler,
+                           urunler=urunler,
+                           secili_tedarikci=filtre_tedarikci,
+                           secili_urun=filtre_urun)
+
+@main.route('/api/hareket-detay', methods=['POST'])
+@login_required
+def get_hareket_detay():
+    data = request.get_json()
+    sevk_no = data.get('sevk_no')
+    detaylar = DatabaseManager.get_movement_details_by_sevk(sevk_no)
+    return jsonify(detaylar)
 
 @main.route('/fatura-sil/<int:id>')
 @login_required
@@ -286,18 +359,14 @@ def fatura_duzenle(id):
     fatura = DatabaseManager.get_fatura(id)
     return render_template('fatura_duzenle.html', f=fatura)
 
-# --- FATURALAR (Filtreli) ---
 @main.route('/faturalar')
 @login_required
 def faturalar():
     tedarikci_id = request.args.get('tedarikci_id')
     tarih_bas = request.args.get('tarih_bas')
     tarih_bit = request.args.get('tarih_bit')
-    
-    # Filtreli fonksiyonu çağır
     grouped_invoices = DatabaseManager.get_all_invoices_grouped(tedarikci_id, tarih_bas, tarih_bit)
     
-    # Filtre için tedarikçi listesi lazım
     conn = DatabaseManager.get_db_connection()
     tedarikciler = conn.execute("SELECT * FROM tedarikciler ORDER BY ad").fetchall()
     conn.close()
@@ -314,7 +383,15 @@ def faturalar():
 def fatura_sil_komple():
     tedarikci_id = request.form.get('tedarikci_id')
     fatura_no = request.form.get('fatura_no')
-    
     success, msg = DatabaseManager.delete_invoice_whole(tedarikci_id, fatura_no)
     flash(msg, 'success' if success else 'danger')
     return redirect(url_for('main.faturalar'))
+
+# --- YEDEKLEME ---
+@main.route('/yedek-al')
+@login_required
+def yedek_al():
+    success, msg = DatabaseManager.backup_db()
+    flash(msg, 'success' if success else 'danger')
+    # İşlem bitince Tanımlar sayfasına geri dön
+    return redirect(url_for('main.tanimlar'))

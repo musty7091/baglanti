@@ -1,8 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Tanımlar</h4>
+    <a href="{{ url_for('main.yedek_al') }}" class="btn btn-secondary shadow-sm">
+        💾 Veritabanı Yedeği Al
+    </a>
+</div>
+
 <div class="row">
     <div class="col-md-6">
-        <div class="card mb-4">
+        <div class="card mb-4 shadow-sm">
             <div class="card-header bg-primary text-white">Yeni Tedarikçi Tanımla</div>
             <div class="card-body">
                 <form action="{{ url_for('main.tedarikci_ekle') }}" method="POST">
@@ -14,24 +22,26 @@
             </div>
         </div>
         
-        <div class="card">
+        <div class="card shadow-sm">
             <div class="card-header">Mevcut Tedarikçiler</div>
-            <ul class="list-group list-group-flush">
-                {% for t in tedarikciler %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    {{ t['ad'] }}
-                    <div class="btn-group btn-group-sm">
-                        <a href="{{ url_for('main.tedarikci_duzenle', id=t['id']) }}" class="btn btn-outline-warning">Düz.</a>
-                        <a href="{{ url_for('main.tedarikci_sil', id=t['id']) }}" class="btn btn-outline-danger" onclick="return confirm('Silmek istediğine emin misin?')">Sil</a>
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
+            <div style="max-height: 500px; overflow-y: auto;">
+                <ul class="list-group list-group-flush">
+                    {% for t in tedarikciler %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        {{ t['ad'] }}
+                        <div class="btn-group btn-group-sm">
+                            <a href="{{ url_for('main.tedarikci_duzenle', id=t['id']) }}" class="btn btn-outline-warning">Düz.</a>
+                            <a href="{{ url_for('main.tedarikci_sil', id=t['id']) }}" class="btn btn-outline-danger" onclick="return confirm('Silmek istediğine emin misin?')">Sil</a>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
     </div>
 
     <div class="col-md-6">
-        <div class="card mb-4">
+        <div class="card mb-4 shadow-sm">
             <div class="card-header bg-success text-white">Yeni Ürün Tanımla</div>
             <div class="card-body">
                 <form action="{{ url_for('main.urun_ekle') }}" method="POST">
@@ -50,7 +60,7 @@
             </div>
         </div>
         
-        <div class="card">
+        <div class="card shadow-sm">
             <div class="card-header">Kayıtlı Ürünler</div>
             <div style="max-height: 500px; overflow-y: auto;">
                 <ul class="list-group list-group-flush">

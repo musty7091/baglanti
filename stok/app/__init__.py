@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_login import LoginManager
 from config import Config
+import os
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -9,6 +10,14 @@ def create_app(config_class=Config):
     # Veritabanı başlat
     from app.models import DatabaseManager
     DatabaseManager.init_db(app.config['DB_NAME'])
+
+    # --- OTOMATİK YEDEKLEME (UYGULAMA BAŞLARKEN) ---
+    # Sadece ana işlemde çalışsın (Debug modunda iki kere çalışmasını engeller)
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        with app.app_context():
+            print("Sistem başlatılıyor... Otomatik yedek alınıyor...")
+            DatabaseManager.backup_db()
+    # -----------------------------------------------
 
     # Login Yönetimi
     login_manager = LoginManager()
@@ -19,18 +28,12 @@ def create_app(config_class=Config):
     def load_user(user_id):
         return DatabaseManager.get_user_by_id(user_id)
 
-    # --- ÖZEL FİLTRELER (TL Formatı) ---
     @app.template_filter('money')
     def money_format(value):
-        if value is None:
-            return "0,00"
-        # Önce Amerikan formatına çevir: 1,234.56
+        if value is None: return "0,00"
         s = "{:,.2f}".format(value)
-        # Sonra karakterleri değiştir: Virgül -> X, Nokta -> Virgül, X -> Nokta
-        # Sonuç: 1.234,56
         return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # Blueprint'leri kaydet
     from app.routes import main
     app.register_blueprint(main)
 

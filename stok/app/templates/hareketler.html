@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card mb-4 no-print">
+    <div class="card-header">Filtreleme</div>
+    <div class="card-body bg-light">
+        <form action="{{ url_for('main.hareketler') }}" method="GET" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Tedarikçi</label>
+                <select name="tedarikci" class="form-select select2">
+                    <option value="">Tümü</option>
+                    {% for t in tedarikciler %}
+                    <option value="{{ t['id'] }}" {% if secili_tedarikci|string == t['id']|string %}selected{% endif %}>{{ t['ad'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Ürün</label>
+                <select name="urun" class="form-select select2">
+                    <option value="">Tümü</option>
+                    {% for u in urunler %}
+                    <option value="{{ u['id'] }}" {% if secili_urun|string == u['id']|string %}selected{% endif %}>{{ u['ad'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary w-100">Filtrele</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">📦 Sevk Hareket Geçmişi</h5>
+    </div>
+    <div class="card-body">
+         <div class="table-responsive">
+             <table id="hareketTable" class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Sevk No</th>
+                        <th>Tarih</th>
+                        <th>Tedarikçi</th>
+                        <th>Depo / Teslim Alan</th>
+                        <th class="text-center">Kalem Sayısı</th>
+                        <th class="text-center">Toplam Çıkış</th>
+                        <th class="text-end">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in hareketler %}
+                    <tr>
+                        <td class="fw-bold">{{ log['sevk_no'] }}</td>
+                        <td>{{ log['tarih'] }}</td>
+                        <td>{{ log['tedarikci'] }}</td>
+                        <td>
+                            <div>{{ log['depo'] }}</div>
+                            <small class="text-muted">{{ log['teslim_alan'] }}</small>
+                        </td>
+                        <td class="text-center">{{ log['kalem_sayisi'] }}</td>
+                        <td class="text-center text-danger fw-bold">-{{ log['toplam_adet'] }}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showMovementDetails('{{ log['sevk_no'] }}')">
+                                Detay / İptal Et
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+             </table>
+         </div>
+    </div>
+</div>
+
+<div class="modal fade" id="movementModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title">Sevk Detayı: <span id="modalSevkNo" class="fw-bold"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Ürün</th>
+                            <th class="text-center">Adet</th>
+                            <th>Depo</th>
+                            <th>Teslim Alan</th>
+                            <th class="text-end">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalMovementBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('#hareketTable').DataTable({
+            "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json" },
+            "pageLength": 10,
+            "lengthMenu": [10, 25, 50, 100],
+            "ordering": false, // Varsayılan tarih sıralaması bozulmasın
+            "dom": '<"d-flex justify-content-between mb-3"lf>rtip'
+        });
+    });
+
+    function showMovementDetails(sevk_no) {
+        const modal = new bootstrap.Modal(document.getElementById('movementModal'));
+        document.getElementById('modalSevkNo').innerText = sevk_no;
+        const tbody = document.getElementById('modalMovementBody');
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Yükleniyor...</td></tr>';
+        modal.show();
+
+        fetch('/api/hareket-detay', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ sevk_no: sevk_no })
+        })
+        .then(response => response.json())
+        .then(data => {
+            tbody.innerHTML = '';
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">Detay bulunamadı.</td></tr>';
+                return;
+            }
+            data.forEach(item => {
+                const row = `
+                    <tr>
+                        <td>${item.urun_ad}</td>
+                        <td class="text-center text-danger fw-bold">-${item.adet}</td>
+                        <td>${item.depo}</td>
+                        <td>${item.teslim_alan}</td>
+                        <td class="text-end">
+                            <a href="/hareket-sil/${item.id}" 
+                               class="btn btn-sm btn-danger py-0"
+                               onclick="return confirm('Bu kalemi iptal edip stoku geri yüklemek istiyor musunuz?');">
+                               İptal Et
+                            </a>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        });
+    }
+</script>
+{% endblock %}

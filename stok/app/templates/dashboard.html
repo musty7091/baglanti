@@ -91,11 +91,9 @@
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        // Backend'den gelen verileri JavaScript dizilerine çeviriyoruz
         const labels = [{% for row in ozet %}"{{ row[0] }}",{% endfor %}];
         const dataValues = [{% for row in ozet %}{{ row[2] }},{% endfor %}];
 
-        // Eğer veri yoksa grafik oluşturma
         if (labels.length === 0) {
             document.getElementById('supplierChart').parentElement.innerHTML = "<p class='text-muted'>Görüntülenecek veri yok.</p>";
             return;
@@ -104,7 +102,7 @@
         const ctx = document.getElementById('supplierChart').getContext('2d');
         
         new Chart(ctx, {
-            type: 'doughnut', // 'pie' yerine daha şık duran 'doughnut' seçtik
+            type: 'doughnut',
             data: {
                 labels: labels,
                 datasets: [{
@@ -129,14 +127,12 @@
                     },
                     tooltip: {
                         callbacks: {
-                            // Tooltip'te TL formatı göstermek için
                             label: function(context) {
                                 let label = context.label || '';
                                 if (label) {
                                     label += ': ';
                                 }
                                 if (context.parsed !== null) {
-                                    // Türk Lirası formatı
                                     label += new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(context.parsed);
                                 }
                                 return label;
