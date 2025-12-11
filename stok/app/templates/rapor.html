@@ -1,90 +1,256 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card mb-4 no-print">
-    <div class="card-body bg-light">
-        <form action="{{ url_for('main.rapor') }}" method="GET" class="row g-3 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label">Tedarikçi Filtresi</label>
-                <select name="tedarikci" class="form-select select2">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+
+<style>
+    /* --- EKRAN GÖRÜNÜMÜ AYARLARI --- */
+    .table-hover tbody tr:hover {
+        background-color: #f0f8ff;
+    }
+    
+    /* Metinlerin alt satıra kaymasını engelle */
+    th, td {
+        white-space: nowrap !important;
+        vertical-align: middle !important;
+    }
+
+    /* Accordion Stil */
+    .accordion-button:not(.collapsed) {
+        background-color: #e7f1ff;
+        color: #0c63e4;
+        box-shadow: inset 0 -1px 0 rgba(0,0,0,.125);
+    }
+    .detail-table th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; background-color: #e9ecef; }
+    .detail-table td { font-size: 0.85rem; }
+
+    /* Sayfalandırma Butonları Stili */
+    .pagination-container .page-link {
+        color: #333;
+        border: 1px solid #dee2e6;
+        margin: 0 2px;
+        cursor: pointer;
+        padding: 0.375rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    .pagination-container .page-link.active {
+        background-color: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+    .pagination-container .page-link:hover:not(.active) {
+        background-color: #e9ecef;
+    }
+    .pagination-container .disabled .page-link {
+        color: #6c757d;
+        pointer-events: none;
+        background-color: #fff;
+        border-color: #dee2e6;
+    }
+
+    /* --- YAZDIRMA (PRINT) İÇİN ÖZEL AYARLAR --- */
+    @media print {
+        @page {
+            size: landscape;
+            margin: 5mm 10mm 5mm 10mm;
+        }
+
+        /* Yazdırırken Sayfalandırmayı İptal Et (Tüm Satırları Göster) */
+        tr { display: table-row !important; }
+        .pagination-container { display: none !important; }
+
+        /* Bootstrap container genişletme (Tam sayfa kullanım) */
+        .container, .container-fluid, .row, .col-md-12, .col-12, .card-body {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+        }
+
+        .no-print, .btn, form, .card-header button, .fa-chevron-right, .fa-chevron-down, nav, footer { 
+            display: none !important; 
+        }
+
+        .card { 
+            border: none !important; 
+            box-shadow: none !important; 
+            margin: 0 !important; 
+            background-color: transparent !important;
+        }
+        .card-header { 
+            background: transparent !important; 
+            border-bottom: 2px solid #000 !important; 
+            color: #000 !important;
+            padding-left: 0 !important;
+            margin-bottom: 10px !important;
+        }
+
+        table { width: 100% !important; border-collapse: collapse !important; font-size: 10pt !important; }
+        th, td { 
+            border: 1px solid #aaa !important; 
+            padding: 4px 8px !important; 
+            color: #000 !important; 
+        }
+        thead th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
+        a { text-decoration: none !important; color: #000 !important; font-weight: bold !important; }
+        .collapse { display: none !important; }
+        .badge { 
+            border: 1px solid #000 !important; 
+            color: #000 !important; 
+            padding: 2px 5px !important;
+        }
+    }
+</style>
+
+<div class="card shadow-sm border-0 mb-3 no-print">
+    <div class="card-body bg-light py-3">
+        <form action="{{ url_for('main.rapor') }}" method="GET" class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label text-muted fw-bold small mb-1">TEDARİKÇİ</label>
+                <select name="tedarikci" class="form-select select2 form-select-sm">
                     <option value="">Tümü</option>
                     {% for t in tedarikciler %}
                     <option value="{{ t['id'] }}" {% if secili_tedarikci|string == t['id']|string %}selected{% endif %}>{{ t['ad'] }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
-                <label class="form-label">Ürün Filtresi</label>
-                <select name="urun" class="form-select select2">
+            <div class="col-md-5">
+                <label class="form-label text-muted fw-bold small mb-1">ÜRÜN</label>
+                <select name="urun" class="form-select select2 form-select-sm">
                     <option value="">Tümü</option>
                     {% for u in urunler %}
                     <option value="{{ u['id'] }}" {% if secili_urun|string == u['id']|string %}selected{% endif %}>{{ u['ad'] }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
-                <button type="submit" class="btn btn-primary w-100">Filtrele</button>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="fas fa-filter me-1"></i> Filtrele
+                </button>
             </div>
         </form>
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">Aktif (Bekleyen) Bakiyeler</h4>
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 text-secondary fw-bold"><i class="fas fa-chart-pie me-2 no-print"></i>Aktif Stok Özeti</h5>
+        <div class="no-print">
+            <button onclick="exportTableToExcel()" class="btn btn-success btn-sm text-white me-1">
+                <i class="fas fa-file-excel me-1"></i> Excel
+            </button>
+            <button onclick="window.print()" class="btn btn-secondary btn-sm">
+                <i class="fas fa-print me-1"></i> Yazdır
+            </button>
+        </div>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table id="activeTable" class="table table-bordered table-striped w-100">
-                <thead class="table-dark">
+            <table class="table table-hover align-middle mb-0" id="activeTable">
+                <thead class="table-light text-secondary">
                     <tr>
+                        <th class="ps-3" style="width: 30px;">#</th>
                         <th>Tedarikçi</th>
-                        <th>Ürün</th>
-                        <th>Fatura No</th>
-                        <th>Tarih</th> 
-                        <th class="text-center">Alınan</th>
-                        <th class="text-end">Birim Maliyet</th>
-                        <th class="text-center">Kalan</th>
-                        <th class="text-end">Bakiye Değeri</th>
+                        <th>Ürün Adı</th>
+                        <th class="text-center">Parça</th>
+                        <th class="text-center">Top. Kalan</th>
+                        <th class="text-end pe-3">Top. Değer</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for row in aktif_baglantilar %}
-                    <tr>
-                        <td>{{ row['tedarikci'] }}</td>
-                        <td>{{ row['urun'] }}</td>
-                        <td>{{ row['fatura_no'] }}</td>
-                        <td>{{ row['tarih'] }}</td>
-                        <td class="text-center">{{ row['toplam_adet'] }}</td>
-                        <td class="text-end">{{ row['net_maliyet'] | money }} TL</td>
-                        <td class="text-center fw-bold text-danger">{{ row['kalan'] }}</td>
-                        <td class="text-end fw-bold">{{ (row['net_maliyet'] * row['kalan']) | money }} TL</td>
-                    </tr>
+                <tbody id="activeTableBody">
+                    {% set sorted_data = aktif_baglantilar | sort(attribute='urun') | sort(attribute='tedarikci') %}
+                    
+                    {% for tedarikci, tedarikci_items in sorted_data | groupby('tedarikci') %}
+                        {% for urun, urun_items in tedarikci_items | groupby('urun') %}
+                        
+                            {% set ns = namespace(toplam_kalan=0, toplam_deger=0) %}
+                            {% for item in urun_items %}
+                                {% set ns.toplam_kalan = ns.toplam_kalan + item.kalan %}
+                                {% set ns.toplam_deger = ns.toplam_deger + (item.kalan * item.net_maliyet) %}
+                            {% endfor %}
+                            
+                            <tr class="active-item" style="cursor: pointer;" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}_{{ tedarikci|replace(' ', '')|replace('.', '') }}">
+                                <td class="ps-3 text-muted"><i class="fas fa-chevron-right small"></i></td>
+                                <td class="fw-bold text-primary">{{ tedarikci }}</td>
+                                <td class="fw-bold text-dark">{{ urun }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-dark border">{{ urun_items|length }}</span>
+                                </td>
+                                <td class="text-center fw-bold text-danger fs-6">{{ ns.toplam_kalan }}</td>
+                                <td class="text-end fw-bold text-success pe-3">{{ ns.toplam_deger | money }} TL</td>
+                            </tr>
+
+                            <tr class="active-child">
+                                <td colspan="6" class="p-0 border-0">
+                                    <div class="collapse" id="collapse{{ loop.index }}_{{ tedarikci|replace(' ', '')|replace('.', '') }}">
+                                        <div class="p-3 bg-light border-bottom border-top shadow-inner">
+                                            <div class="card border-0">
+                                                <div class="card-header bg-secondary text-white py-1 ps-3">
+                                                    <small class="fw-bold"><i class="fas fa-info-circle me-1"></i> {{ urun }} - Fatura Detayları</small>
+                                                </div>
+                                                <div class="card-body p-0">
+                                                    <table class="table table-sm table-striped mb-0 detail-table bg-white">
+                                                        <thead>
+                                                            <tr>
+                                                                <th class="ps-3">Fatura No</th>
+                                                                <th>Tarih</th>
+                                                                <th class="text-center">İlk Alım</th>
+                                                                <th class="text-end">Birim Maliyet</th>
+                                                                <th class="text-center text-danger">Kalan</th>
+                                                                <th class="text-end pe-3">Tutar</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for row in urun_items %}
+                                                            <tr>
+                                                                <td class="ps-3 fw-bold font-monospace">{{ row['fatura_no'] }}</td>
+                                                                <td>{{ row['tarih'] }}</td>
+                                                                <td class="text-center text-muted">{{ row['toplam_adet'] }}</td>
+                                                                <td class="text-end">{{ row['net_maliyet'] | money }} TL</td>
+                                                                <td class="text-center fw-bold text-danger">{{ row['kalan'] }}</td>
+                                                                <td class="text-end pe-3">{{ (row['kalan'] * row['net_maliyet']) | money }} TL</td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
                     {% endfor %}
                 </tbody>
-                <tfoot class="table-secondary fw-bold">
+                <tfoot class="bg-light border-top">
                     <tr>
-                        <td colspan="4" class="text-end text-uppercase">Genel Toplamlar:</td>
-                        <td class="text-center">{{ toplam_alinan }}</td>
-                        <td></td> <td class="text-center text-danger">{{ toplam_kalan }}</td>
-                        <td class="text-end">{{ genel_toplam | money }} TL</td>
+                        <td colspan="4" class="text-end text-uppercase fw-bold py-2 text-secondary">GENEL TOPLAM:</td>
+                        <td class="text-center text-danger fw-bold fs-5 py-2">{{ toplam_kalan }}</td>
+                        <td class="text-end fw-bold fs-5 py-2 pe-3 text-success">{{ genel_toplam | money }} TL</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
+        
+        <div class="d-flex justify-content-center py-3 pagination-container bg-white border-top">
+            <nav>
+                <ul class="pagination mb-0" id="activePagination"></ul>
+            </nav>
+        </div>
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-header bg-secondary text-white">
-        <h5 class="mb-0">Tamamlanan (Geçmiş) Bağlantılar</h5>
+<div class="card shadow-sm border-0 mb-4 no-print">
+    <div class="card-header bg-white border-bottom py-3">
+        <h5 class="mb-0 text-secondary fw-bold"><i class="fas fa-history me-2"></i>Geçmiş İşlemler</h5>
     </div>
-    <div class="card-body">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-bordered table-sm text-muted w-100">
+            <table class="table table-hover align-middle mb-0 text-muted small" id="historyTable">
                 <thead class="table-light">
                     <tr>
-                        <th>Tedarikçi</th>
+                        <th class="ps-3">Tedarikçi</th>
                         <th>Ürün</th>
                         <th>Fatura No</th>
                         <th>Tarih</th>
@@ -93,143 +259,204 @@
                         <th>Durum</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="historyTableBody">
                     {% for row in gecmis_baglantilar %}
-                    <tr>
-                        <td>{{ row['tedarikci'] }}</td>
+                    <tr class="history-item">
+                        <td class="ps-3">{{ row['tedarikci'] }}</td>
                         <td>{{ row['urun'] }}</td>
                         <td>{{ row['fatura_no'] }}</td>
                         <td>{{ row['tarih'] }}</td>
                         <td>{{ row['toplam_adet'] }}</td>
                         <td>{{ row['kalan'] }}</td>
-                        <td><span class="badge bg-success">Tamamlandı</span></td>
+                        <td><span class="badge bg-success bg-opacity-75">Tamamlandı</span></td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="7" class="text-center">Geçmiş kayıt bulunamadı.</td></tr>
+                    <tr><td colspan="7" class="text-center py-3">Geçmiş kayıt bulunamadı.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        <div class="d-flex justify-content-center py-3 pagination-container bg-white border-top">
+            <nav>
+                <ul class="pagination mb-0" id="historyPagination"></ul>
+            </nav>
         </div>
     </div>
 </div>
 
 <script>
-    $(document).ready(function() {
-        var simdi = new Date();
-        var tarihString = simdi.toLocaleDateString('tr-TR') + "_" + simdi.toLocaleTimeString('tr-TR');
-        var baslik = 'Stok Bakiyesi Raporu';
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // --- 1. FONKSİYON: Aktif Stok Tablosu Sayfalandırma (Parent/Child yapısı var) ---
+        function initActiveTablePagination() {
+            const rowsPerPage = 15;
+            const container = document.getElementById("activeTableBody");
+            if (!container) return;
 
-        // Dışa aktarma ayarları (Footer dahil)
-        var exportAyarlari = {
-            columns: ':visible',
-            stripHtml: true,
-            footer: true 
-        };
+            const parentRows = container.querySelectorAll("tr.active-item");
+            const childRows = container.querySelectorAll("tr.active-child");
+            const controls = document.getElementById("activePagination");
+            const totalRows = parentRows.length;
+            const totalPages = Math.ceil(totalRows / rowsPerPage);
+            let currentPage = 1;
 
-        $('#activeTable').DataTable({
-            "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json" },
-            "pageLength": 25,
-            "lengthMenu": [10, 25, 50, 100, "Tümü"],
-            "dom": '<"d-flex justify-content-between mb-3"Bf>rtip',
-            "buttons": [
-                {
-                    extend: 'print',
-                    text: '🖨️ Yazdır',
-                    className: 'btn btn-secondary btn-sm',
-                    title: baslik,
-                    exportOptions: exportAyarlari,
-                    customize: function (win) {
-                        // 1. Yazdırma Modunu YATAY (Landscape) Yap
-                        var css = '@page { size: landscape; }',
-                            head = win.document.head || win.document.getElementsByTagName('head')[0],
-                            style = win.document.createElement('style');
-                        style.type = 'text/css';
-                        style.media = 'print';
-                        if (style.styleSheet){ style.styleSheet.cssText = css; } 
-                        else { style.appendChild(win.document.createTextNode(css)); }
-                        head.appendChild(style);
+            function showPage(page) {
+                if (page < 1) page = 1;
+                if (page > totalPages) page = totalPages;
+                currentPage = page;
+                const start = (page - 1) * rowsPerPage;
+                const end = start + rowsPerPage;
 
-                        // 2. Genel Sayfa Stili
-                        $(win.document.body).css('font-size', '9pt').css('padding', '10px');
-                        
-                        // 3. Başlık Ortala
-                        $(win.document.body).find('h1')
-                            .css('text-align', 'center')
-                            .css('font-size', '16pt')
-                            .css('margin-bottom', '15px');
-                        
-                        // 4. Tablo Stili
-                        $(win.document.body).find('table')
-                            .addClass('compact')
-                            .css('width', '100%');
-                        
-                        // 5. Başlıkları Koyu Yap
-                        $(win.document.body).find('th')
-                            .css('background-color', '#2c3e50')
-                            .css('color', 'white');
-
-                        // 6. ALT TOPLAMLARI GÖSTER (Kritik Ayar)
-                        $(win.document.body).find('tfoot').css('display', 'table-footer-group');
-                        $(win.document.body).find('tfoot td')
-                            .css('font-weight', 'bold')
-                            .css('border-top', '2px solid black')
-                            .css('background-color', '#f0f0f0');
-                    }
-                },
-                {
-                    extend: 'excelHtml5',
-                    text: '📊 Excel',
-                    className: 'btn btn-success btn-sm',
-                    title: baslik + ' - ' + tarihString,
-                    exportOptions: exportAyarlari,
-                    autoFilter: true,
-                    sheetName: 'Stok Durumu',
-                    footer: true 
-                },
-                {
-                    extend: 'pdfHtml5',
-                    text: '📄 PDF',
-                    className: 'btn btn-danger btn-sm',
-                    title: baslik,
-                    orientation: 'landscape',
-                    pageSize: 'A4',
-                    exportOptions: exportAyarlari,
-                    footer: true,
-                    customize: function (doc) {
-                        doc.defaultStyle.alignment = 'center';
-                        doc.styles.tableHeader.alignment = 'center';
-                        
-                        // Sütun Genişlikleri (8 Sütun)
-                        doc.content[1].table.widths = [
-                            'auto', '*', 'auto', 'auto', 
-                            'auto', 'auto', 'auto', 'auto'
-                        ];
-                        
-                        // Başlık Stili
-                        doc.styles.tableHeader.fillColor = '#2c3e50';
-                        doc.styles.tableHeader.color = 'white';
-                        doc.styles.tableHeader.fontSize = 9;
-                        doc.defaultStyle.fontSize = 8;
-                        
-                        // Footer Stili
-                        doc.styles.tableFooter = {
-                            bold: true,
-                            fontSize: 9,
-                            fillColor: '#f2f2f2',
-                            alignment: 'center'
-                        };
-
-                        // Kenarlıklar
-                        var objLayout = {};
-                        objLayout['hLineWidth'] = function(i) { return .5; };
-                        objLayout['vLineWidth'] = function(i) { return .5; };
-                        objLayout['hLineColor'] = function(i) { return '#aaa'; };
-                        objLayout['vLineColor'] = function(i) { return '#aaa'; };
-                        doc.content[1].layout = objLayout;
+                for (let i = 0; i < totalRows; i++) {
+                    if (i >= start && i < end) {
+                        parentRows[i].style.display = "";
+                        childRows[i].style.display = ""; 
+                    } else {
+                        parentRows[i].style.display = "none";
+                        childRows[i].style.display = "none";
                     }
                 }
-            ]
+                renderControls(page, totalPages, controls, showPage);
+            }
+
+            if (totalRows > 0) showPage(1);
+            else controls.innerHTML = '';
+        }
+
+        // --- 2. FONKSİYON: Geçmiş İşlemler Tablosu Sayfalandırma (Basit Satır Yapısı) ---
+        function initHistoryTablePagination() {
+            const rowsPerPage = 15; // İstersen burayı 10 yapabilirsin
+            const container = document.getElementById("historyTableBody");
+            if (!container) return;
+
+            const rows = container.querySelectorAll("tr.history-item");
+            const controls = document.getElementById("historyPagination");
+            const totalRows = rows.length;
+            const totalPages = Math.ceil(totalRows / rowsPerPage);
+            let currentPage = 1;
+
+            function showPage(page) {
+                if (page < 1) page = 1;
+                if (page > totalPages) page = totalPages;
+                currentPage = page;
+                const start = (page - 1) * rowsPerPage;
+                const end = start + rowsPerPage;
+
+                for (let i = 0; i < totalRows; i++) {
+                    if (i >= start && i < end) {
+                        rows[i].style.display = "";
+                    } else {
+                        rows[i].style.display = "none";
+                    }
+                }
+                renderControls(page, totalPages, controls, showPage);
+            }
+
+            if (totalRows > 0) showPage(1);
+            else controls.innerHTML = '';
+        }
+
+        // --- YARDIMCI: Butonları Oluşturan Ortak Fonksiyon ---
+        function renderControls(current, total, controlElement, callback) {
+            let html = '';
+            
+            // Önceki
+            html += `<li class="page-item ${current === 1 ? 'disabled' : ''}">
+                        <a class="page-link" href="javascript:void(0)" data-page="${current - 1}">Önceki</a>
+                     </li>`;
+
+            // Sayfalar (Akıllı aralık: 1 ... 4 5 6 ... 10)
+            let startPage = Math.max(1, current - 2);
+            let endPage = Math.min(total, current + 2);
+
+            if (startPage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="javascript:void(0)" data-page="1">1</a></li>`;
+                if (startPage > 2) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<li class="page-item ${i === current ? 'active' : ''}">
+                            <a class="page-link" href="javascript:void(0)" data-page="${i}">${i}</a>
+                         </li>`;
+            }
+
+            if (endPage < total) {
+                if (endPage < total - 1) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                html += `<li class="page-item"><a class="page-link" href="javascript:void(0)" data-page="${total}">${total}</a></li>`;
+            }
+
+            // Sonraki
+            html += `<li class="page-item ${current === total ? 'disabled' : ''}">
+                        <a class="page-link" href="javascript:void(0)" data-page="${current + 1}">Sonraki</a>
+                     </li>`;
+
+            controlElement.innerHTML = html;
+
+            // Event Listener Ekle
+            const links = controlElement.querySelectorAll('a.page-link');
+            links.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const page = parseInt(this.getAttribute('data-page'));
+                    if (!isNaN(page)) callback(page);
+                });
+            });
+        }
+
+        // Başlat
+        initActiveTablePagination();
+        initHistoryTablePagination();
+    });
+
+    // İkon değiştirme (Collapse)
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(tr => {
+        tr.addEventListener('click', function() {
+            let icon = this.querySelector('.fa-chevron-right, .fa-chevron-down');
+            if (icon) {
+                if (icon.classList.contains('fa-chevron-right')) {
+                    icon.classList.remove('fa-chevron-right');
+                    icon.classList.add('fa-chevron-down');
+                } else {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-right');
+                }
+            }
         });
     });
+
+    // Excel İndirme
+    function exportTableToExcel() {
+        let data = [];
+        data.push(["Tedarikçi", "Ürün", "Fatura No", "Tarih", "Toplam Alınan", "Birim Maliyet", "Kalan Adet", "Toplam Değer"]);
+
+        let detailRows = document.querySelectorAll('.detail-table tbody tr');
+        detailRows.forEach(row => {
+            let cols = row.querySelectorAll('td');
+            let collapseDiv = row.closest('.collapse');
+            let parentTrId = collapseDiv.id;
+            
+            let controlBtn = document.querySelector(`[data-bs-target="#${parentTrId}"]`);
+            if (controlBtn) {
+                let tedarikci = controlBtn.cells[1].innerText;
+                let urun = controlBtn.cells[2].innerText;
+                let faturaNo = cols[0].innerText;
+                let tarih = cols[1].innerText;
+                let ilkAlinan = cols[2].innerText;
+                let birimMaliyet = cols[3].innerText; 
+                let kalan = cols[4].innerText;
+                let tutar = cols[5].innerText;
+                data.push([tedarikci, urun, faturaNo, tarih, ilkAlinan, birimMaliyet, kalan, tutar]);
+            }
+        });
+
+        var wb = XLSX.utils.book_new();
+        var ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [{wch: 20}, {wch: 30}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 20}];
+        XLSX.utils.book_append_sheet(wb, ws, "Stok Raporu");
+        let bugun = new Date().toLocaleDateString('tr-TR').replace(/\./g, '_');
+        XLSX.writeFile(wb, "Stok_Raporu_" + bugun + ".xlsx");
+    }
 </script>
+
 {% endblock %}

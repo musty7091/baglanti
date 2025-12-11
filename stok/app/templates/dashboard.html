@@ -45,7 +45,7 @@
                                 <th class="ps-4">Tedarikçi</th>
                                 <th class="text-center">Adet</th>
                                 <th class="text-end">Bağlantı Değeri</th>
-                                <th class="text-end pe-4">İşlem</th>
+                                <th class="text-center">Pay</th> <th class="text-end pe-4">İşlem</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -56,17 +56,24 @@
                                     <span class="badge bg-light text-dark border px-2 py-1">{{ row[1] }}</span>
                                 </td>
                                 <td class="text-end fw-bold text-success">{{ row[2] | money }} TL</td>
+                                
+                                <td class="text-center text-muted small">
+                                    {% if toplam_tutar > 0 %}
+                                        %{{ "%.1f"|format(row[2] / toplam_tutar * 100) }}
+                                    {% else %}
+                                        %0.0
+                                    {% endif %}
+                                </td>
                                 <td class="text-end pe-4">
                                     <div class="btn-group">
-                                        <a href="{{ url_for('main.mal_cek', tedarikci_id=row[3]) }}" class="btn btn-sm btn-outline-primary">Çek</a>
-                                        <a href="{{ url_for('main.rapor', tedarikci=row[3]) }}" class="btn btn-sm btn-outline-secondary">Detay</a>
+                                        <a href="{{ url_for('main.mal_cek', tedarikci_id=row[3]) }}" class="btn btn-sm btn-outline-primary">Stok Çek</a>
+                                        <a href="{{ url_for('main.rapor', tedarikci=row[3]) }}" class="btn btn-sm btn-outline-secondary"> Fatura Detay</a>
                                     </div>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="4" class="text-center py-4 text-muted">
-                                    Henüz aktif bakiyesi olan bir tedarikçi yok.
+                                <td colspan="5" class="text-center py-4 text-muted"> Henüz aktif bakiyesi olan bir tedarikçi yok.
                                 </td>
                             </tr>
                             {% endfor %}

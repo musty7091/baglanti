@@ -13,7 +13,7 @@
             <div class="row mb-4">
                 <div class="col-md-6">
                     <label class="form-label fw-bold">İşlem Yapılacak Fatura</label>
-                    <select id="faturaSecim" class="form-select form-select-lg select2" onchange="faturaGetir()">
+                    <select id="faturaSecim" class="form-select form-select-lg select2">
                         <option value="">Seçiniz...</option>
                         {% for f in faturalar %}
                         <option value="{{ f['tedarikci_id'] }}|{{ f['fatura_no'] }}">
@@ -41,8 +41,8 @@
                         <label>Depo</label>
                         <select name="depo" class="form-select">
                             <option value="Magaza">Mağaza</option>
-                            <option value="Depo1">Depo 1</option>
-                            <option value="Depo2">Depo 2</option>
+                            <option value="Depo1">Bellapais</option>
+                            <option value="Depo2">Türk Mahallesi</option>
                         </select>
                     </div>
                 </div>
@@ -80,6 +80,7 @@
     // Sayfa yüklendiğinde Select2 eventini dinle
     document.addEventListener("DOMContentLoaded", function() {
         // jQuery ile Select2 change eventini yakala (Daha stabil çalışır)
+        // Bu event tetiklendiğinde faturaGetir() SADECE BİR KEZ çalışacak.
         $('#faturaSecim').on('select2:select', function (e) {
             faturaGetir();
         });
@@ -100,9 +101,10 @@
         const tedarikci_id = parts[0];
         const fatura_no = parts[1];
 
+        // Alanı temizle ve loading göster
         listArea.style.display = 'none';
         loading.style.display = 'block';
-        tbody.innerHTML = '';
+        tbody.innerHTML = ''; 
 
         fetch('/api/fatura-detay', {
             method: 'POST',
@@ -112,17 +114,23 @@
         .then(response => response.json())
         .then(data => {
             loading.style.display = 'none';
+            // Veri gelmeden önce temizlendiğinden emin olalım (Garanti olsun)
+            tbody.innerHTML = ''; 
+            
             if (data.length > 0) {
                 listArea.style.display = 'block';
                 
                 data.forEach(item => {
+                    // Backend güncellemesine uygun olarak: Ürün ID, Tedarikçi ID ve Fatura No gizli alan olarak ekleniyor
                     const row = `
                         <tr>
                             <td>${item.barkod}</td>
                             <td>${item.urun_ad}</td>
                             <td class="text-center fw-bold">${item.kalan_adet}</td>
                             <td>
-                                <input type="hidden" name="fatura_id[]" value="${item.fatura_id}">
+                                <input type="hidden" name="urun_id[]" value="${item.urun_id || item.id}"> <input type="hidden" name="tedarikci_id[]" value="${tedarikci_id}">
+                                <input type="hidden" name="fatura_no[]" value="${fatura_no}">
+                                
                                 <input type="number" name="adet[]" class="form-control border-danger fw-bold" 
                                        placeholder="0" min="0" max="${item.kalan_adet}">
                             </td>
@@ -133,6 +141,10 @@
             } else {
                 alert("Bu faturada çekilecek ürün kalmamış!");
             }
+        })
+        .catch(error => {
+            console.error('Hata:', error);
+            loading.style.display = 'none';
         });
     }
 </script>
