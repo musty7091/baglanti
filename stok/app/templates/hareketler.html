@@ -61,7 +61,7 @@
                         <td class="text-center">{{ log['kalem_sayisi'] }}</td>
                         <td class="text-center text-danger fw-bold">-{{ log['toplam_adet'] }}</td>
                         <td class="text-end">
-                            <button class="btn btn-sm btn-outline-primary" onclick="showMovementDetails('{{ log['sevk_no'] }}')">
+                            <button class="btn btn-sm btn-outline-primary" onclick="showMovementDetails('{{ log['sevk_no'] }}', '{{ log['tedarikci_id'] }}')">
                                 Detay / İptal Et
                             </button>
                         </td>
@@ -104,12 +104,13 @@
             "language": { "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json" },
             "pageLength": 10,
             "lengthMenu": [10, 25, 50, 100],
-            "ordering": false, // Varsayılan tarih sıralaması bozulmasın
+            "ordering": false,
             "dom": '<"d-flex justify-content-between mb-3"lf>rtip'
         });
     });
 
-    function showMovementDetails(sevk_no) {
+    // KRİTİK DÜZELTME: Tedarikçi ID parametresi eklendi
+    function showMovementDetails(sevk_no, tedarikci_id) {
         const modal = new bootstrap.Modal(document.getElementById('movementModal'));
         document.getElementById('modalSevkNo').innerText = sevk_no;
         const tbody = document.getElementById('modalMovementBody');
@@ -119,7 +120,8 @@
         fetch('/api/hareket-detay', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ sevk_no: sevk_no })
+            // Backend'e hem sevk no hem de tedarikçi id gönderiyoruz
+            body: JSON.stringify({ sevk_no: sevk_no, tedarikci_id: tedarikci_id })
         })
         .then(response => response.json())
         .then(data => {

@@ -109,7 +109,11 @@
         fetch('/api/fatura-detay', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ tedarikci_id: tedarikci_id, fatura_no: fatura_no })
+            body: JSON.stringify({ 
+                tedarikci_id: tedarikci_id, 
+                fatura_no: fatura_no,
+                is_grouped: true // ÖNEMLİ: Gruplama isteği
+            })
         })
         .then(response => response.json())
         .then(data => {
@@ -128,8 +132,9 @@
                             <td>${item.urun_ad}</td>
                             <td class="text-center fw-bold">${item.kalan_adet}</td>
                             <td>
-                                <input type="hidden" name="urun_id[]" value="${item.urun_id || item.id}"> <input type="hidden" name="tedarikci_id[]" value="${tedarikci_id}">
-                                <input type="hidden" name="fatura_no[]" value="${fatura_no}">
+                                <input type="hidden" name="urun_id[]" value="${item.urun_id}">
+                                <input type="hidden" name="tedarikci_id[]" value="${item.tedarikci_id}">
+                                <input type="hidden" name="fatura_no[]" value="${item.fatura_no}">
                                 
                                 <input type="number" name="adet[]" class="form-control border-danger fw-bold" 
                                        placeholder="0" min="0" max="${item.kalan_adet}">

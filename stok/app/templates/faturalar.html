@@ -153,6 +153,7 @@ function showDetails(tedarikci_id, fatura_no, tedarikci_ad) {
         data.forEach(item => {
             let maliyet = parseFloat(item.net_maliyet).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             
+            // DÜZELTME YAPILAN KISIM BURASI: item.fatura_id yerine item.id kullanıldı.
             const row = `
                 <tr>
                     <td><small>${item.barkod}</small></td>
@@ -160,7 +161,7 @@ function showDetails(tedarikci_id, fatura_no, tedarikci_ad) {
                     <td class="text-end">${maliyet} TL</td>
                     <td class="text-center fw-bold">${item.kalan_adet}</td>
                     <td class="text-center">
-                        <a href="/fatura-duzenle/${item.fatura_id}" class="btn btn-sm btn-warning py-0">Düzenle</a>
+                        <a href="/fatura-duzenle/${item.id}" class="btn btn-sm btn-warning py-0">Düzenle</a>
                     </td>
                 </tr>
             `;

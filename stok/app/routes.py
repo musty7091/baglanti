@@ -62,33 +62,21 @@ def yedek_al():
     flash(msg, 'success' if success else 'danger')
     return redirect(url_for('main.tanimlar'))
 
-# --- EXCEL İŞLEMLERİ (YÜKLEME VE ŞABLON İNDİRME) ---
+# --- EXCEL İŞLEMLERİ ---
 
 @main.route('/sablon-indir')
 @login_required
 def sablon_indir():
-    # Şablon için gerekli sütunlar
     columns = ['barkod', 'urun_adi', 'tedarikci', 'fatura_no', 'tarih', 'adet', 'birim_fiyat', 'iskonto', 'kdv']
-    
-    # Boş bir DataFrame oluştur
     df = pd.DataFrame(columns=columns)
-    
-    # Bellekte (RAM) Excel dosyası oluştur
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Sablon')
-        
-        # Sütun genişliklerini ayarla (Estetik için)
         worksheet = writer.sheets['Sablon']
         for idx, col in enumerate(columns):
             worksheet.column_dimensions[chr(65 + idx)].width = 20
-
     output.seek(0)
-    
-    return send_file(output, 
-                     download_name='stok_giris_sablonu.xlsx', 
-                     as_attachment=True, 
-                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return send_file(output, download_name='stok_giris_sablonu.xlsx', as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @main.route('/excel-yukle', methods=['GET', 'POST'])
 @login_required
@@ -97,29 +85,19 @@ def excel_yukle():
         if 'file' not in request.files:
             flash('Dosya seçilmedi.', 'danger')
             return redirect(request.url)
-        
         file = request.files['file']
-        
         if file.filename == '':
             flash('Dosya seçilmedi.', 'danger')
             return redirect(request.url)
-            
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             file.save(filepath)
-            
-            # Modeldeki fonksiyonu çağır
             success, msg = DatabaseManager.import_from_excel(filepath)
-            
-            try:
-                os.remove(filepath)
-            except:
-                pass
-            
+            try: os.remove(filepath)
+            except: pass
             flash(msg, 'success' if success else 'danger')
             return redirect(url_for('main.excel_yukle'))
-            
     return render_template('excel_yukle.html')
 
 # --- TANIMLAR ---
@@ -137,13 +115,11 @@ def tanimlar():
 def tedarikci_ekle():
     conn = DatabaseManager.get_db_connection()
     ad = request.form['ad'].strip()
-    
     existing = conn.execute("SELECT * FROM tedarikciler WHERE ad = ?", (ad,)).fetchone()
     if existing:
         conn.close()
         flash('Bu isimde bir tedarikçi zaten var!', 'danger')
         return redirect(url_for('main.tanimlar'))
-        
     conn.execute("INSERT INTO tedarikciler (ad) VALUES (?)", (ad,))
     conn.commit()
     conn.close()
@@ -173,15 +149,12 @@ def tedarikci_sil(id):
 def urun_ekle():
     barkod = request.form['barkod'].strip()
     ad = request.form['ad'].strip()
-    
     conn = DatabaseManager.get_db_connection()
     mevcut_urun = conn.execute("SELECT * FROM urunler WHERE barkod = ?", (barkod,)).fetchone()
-    
     if mevcut_urun:
         conn.close()
         flash(f"HATA: Bu barkod ({barkod}) zaten '{mevcut_urun['ad']}' ismiyle kayıtlı!", 'danger')
         return redirect(url_for('main.tanimlar'))
-
     conn.execute("INSERT INTO urunler (barkod, ad) VALUES (?, ?)", (barkod, ad))
     conn.commit()
     conn.close()
@@ -196,17 +169,14 @@ def urun_duzenle(id):
         yeni_ad = request.form['ad'].strip()
         conn = DatabaseManager.get_db_connection()
         kontrol = conn.execute("SELECT * FROM urunler WHERE barkod = ? AND id != ?", (yeni_barkod, id)).fetchone()
-        
         if kontrol:
             conn.close()
             flash(f"HATA: Bu barkod ({yeni_barkod}) zaten '{kontrol['ad']}' ürününe ait.", 'danger')
             return redirect(url_for('main.urun_duzenle', id=id))
-        
         conn.close()
         DatabaseManager.update_urun(id, yeni_barkod, yeni_ad)
         flash('Ürün güncellendi.', 'success')
         return redirect(url_for('main.tanimlar'))
-        
     u = DatabaseManager.get_urun(id)
     return render_template('tanim_duzenle.html', type='urun', data=u)
 
@@ -302,7 +272,8 @@ def get_fatura_detay():
     data = request.get_json()
     tedarikci_id = data.get('tedarikci_id')
     fatura_no = data.get('fatura_no')
-    urunler = DatabaseManager.get_invoice_products(tedarikci_id, fatura_no)
+    is_grouped = data.get('is_grouped', False) # Frontend'den gelen grup isteği
+    urunler = DatabaseManager.get_invoice_products(tedarikci_id, fatura_no, is_grouped)
     return jsonify(urunler)
 
 @main.route('/toplu-cikis-kaydet', methods=['POST'])
@@ -341,7 +312,8 @@ def hareket_sil(id):
 def get_hareket_detay():
     data = request.get_json()
     sevk_no = data.get('sevk_no')
-    detaylar = DatabaseManager.get_movement_details_by_sevk(sevk_no)
+    tedarikci_id = data.get('tedarikci_id') # Yeni parametre eklendi
+    detaylar = DatabaseManager.get_movement_details_by_sevk(sevk_no, tedarikci_id)
     return jsonify(detaylar)
 
 @main.route('/rapor')
@@ -365,16 +337,16 @@ def rapor():
         full_sql = base_sql + " " + " ".join(clauses)
         return full_sql, params
 
-    base_aktif = 'SELECT f.id, t.ad as tedarikci, u.ad as urun, f.tarih, f.fatura_no, f.net_maliyet, f.toplam_adet, f.kalan_adet as kalan FROM faturalar f JOIN tedarikciler t ON f.tedarikci_id = t.id JOIN urunler u ON f.urun_id = u.id WHERE f.kalan_adet > 0'
+    base_aktif = 'SELECT f.id, t.ad as tedarikci, u.ad as urun, u.barkod, f.tarih, f.fatura_no, f.net_maliyet, f.toplam_adet, f.kalan_adet as kalan FROM faturalar f JOIN tedarikciler t ON f.tedarikci_id = t.id JOIN urunler u ON f.urun_id = u.id WHERE f.kalan_adet > 0'
     sql_aktif, params_aktif = build_query(base_aktif)
-    sql_aktif += " ORDER BY t.ad, u.ad, f.tarih"
+    sql_aktif += " ORDER BY t.ad, u.ad, u.barkod, f.tarih"
     aktif_data = conn.execute(sql_aktif, params_aktif).fetchall()
     
     genel_toplam = sum(r['net_maliyet'] * r['kalan'] for r in aktif_data)
     toplam_alinan = sum(r['toplam_adet'] for r in aktif_data)
     toplam_kalan = sum(r['kalan'] for r in aktif_data)
 
-    base_gecmis = 'SELECT f.id, t.ad as tedarikci, u.ad as urun, f.tarih, f.fatura_no, f.net_maliyet, f.toplam_adet, f.kalan_adet as kalan FROM faturalar f JOIN tedarikciler t ON f.tedarikci_id = t.id JOIN urunler u ON f.urun_id = u.id WHERE f.kalan_adet = 0'
+    base_gecmis = 'SELECT f.id, t.ad as tedarikci, u.ad as urun, u.barkod, f.tarih, f.fatura_no, f.net_maliyet, f.toplam_adet, f.kalan_adet as kalan FROM faturalar f JOIN tedarikciler t ON f.tedarikci_id = t.id JOIN urunler u ON f.urun_id = u.id WHERE f.kalan_adet = 0'
     sql_gecmis, params_gecmis = build_query(base_gecmis)
     sql_gecmis += " ORDER BY f.tarih DESC"
     gecmis_data = conn.execute(sql_gecmis, params_gecmis).fetchall()
